@@ -3,10 +3,11 @@ package dynareadout
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"math"
 	"testing"
 )
 
-func TestBindings(t *testing.T) {
+func TestBinout(t *testing.T) {
 	binFile, err := BinoutOpen("dynareadout/test_data/binout0*")
 	if !assert.Nil(t, err) {
 		return
@@ -86,4 +87,53 @@ func TestBindings(t *testing.T) {
 	assert.Len(t, title, 80)
 
 	assert.Equal(t, "Pouch_macro_37Ah                                                                ", title)
+}
+
+func TestD3plot(t *testing.T) {
+	plotFile, err := D3plotOpen("dynareadout/test_data/d3plot")
+	if !assert.Nil(t, err) {
+		return
+	}
+	defer plotFile.Close()
+
+	title, err := plotFile.ReadTitle()
+	assert.Nil(t, err)
+	assert.Equal(t, "Pouch_macro_37Ah                        ", title)
+
+	// TODO: Read Run Time
+
+	if !assert.Equal(t, uint64(102), plotFile.NumTimeSteps()) {
+		return
+	}
+
+	nodeIds, err := plotFile.ReadNodeIDs()
+	if !assert.Nil(t, err) || !assert.Len(t, nodeIds, 114893) {
+		return
+	}
+
+	assert.Equal(t, uint64(84285019), nodeIds[59530])
+	assert.Equal(t, uint64(10), nodeIds[0])
+	assert.Equal(t, uint64(84340381), nodeIds[114892])
+	assert.Equal(t, uint64(2852), nodeIds[2458])
+
+	elementIDs, err := plotFile.ReadAllElementIDs()
+	if !assert.Nil(t, err) || !assert.Len(t, elementIDs, 133456) {
+		return
+	}
+
+	assert.Equal(t, uint64(1), elementIDs[0])
+	assert.Equal(t, uint64(2), elementIDs[1])
+	assert.Equal(t, uint64(3), elementIDs[2])
+	assert.Equal(t, uint64(4), elementIDs[3])
+	assert.Equal(t, uint64(72044862), elementIDs[133318])
+
+	timeValue, err := plotFile.ReadTime(0)
+	assert.Nil(t, err)
+	assert.Greater(t, 1e-6, math.Abs(timeValue-0.0))
+	timeValue, err = plotFile.ReadTime(10)
+	assert.Nil(t, err)
+	assert.Greater(t, 1e-6, math.Abs(timeValue-0.999915))
+	timeValue, err = plotFile.ReadTime(19)
+	assert.Nil(t, err)
+	assert.Greater(t, 1e-6, math.Abs(timeValue-1.899986))
 }

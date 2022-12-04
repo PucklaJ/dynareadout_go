@@ -34,8 +34,12 @@ type goType interface {
 	int8 | int16 | int32 | int64 | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
 
+func carrIdxPtr[Tc cType](arr *Tc, idx int) *Tc {
+	return (*Tc)(unsafe.Pointer(uintptr(unsafe.Pointer(arr)) + uintptr(idx)*unsafe.Sizeof(*arr)))
+}
+
 func carrIdx[Tc cType](arr *Tc, idx int) Tc {
-	return *(*Tc)(unsafe.Pointer(uintptr(unsafe.Pointer(arr)) + uintptr(idx)*unsafe.Sizeof(*arr)))
+	return *carrIdxPtr(arr, idx)
 }
 
 func carrToSlice[Tc cType, Ts goType](carr *Tc, csize C.size_t) []Ts {
