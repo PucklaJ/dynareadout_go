@@ -1,4 +1,0 @@
-[submodule "dynareadout"]
-	path = dynareadout
-	url = https://github.com/PucklaJ/dynareadout.git
-	branch = 0.4
