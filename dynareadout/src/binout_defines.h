@@ -1,8 +1,8 @@
 /***********************************************************************************
  *                         This file is part of dynareadout
- *                    https://github.com/PucklaMotzer09/dynareadout
+ *                    https://github.com/PucklaJ/dynareadout
  ***********************************************************************************
- * Copyright (c) 2022 PucklaMotzer09
+ * Copyright (c) 2022 Jonas Pucher
  *
  * This software is provided 'as-is', without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -49,7 +49,7 @@
 #define BINOUT_TYPE_UINT64 8
 #define BINOUT_TYPE_FLOAT32 9
 #define BINOUT_TYPE_FLOAT64 10
-#define BINOUT_TYPE_INVALID ULONG_MAX
+#define BINOUT_TYPE_INVALID UCHAR_MAX
 
 #define BINOUT_DATA_NAME_LENGTH 1
 #define BINOUT_DATA_POINTER_PREALLOC 100

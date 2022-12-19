@@ -1,8 +1,8 @@
 /***********************************************************************************
  *                         This file is part of dynareadout
- *                    https://github.com/PucklaMotzer09/dynareadout
+ *                    https://github.com/PucklaJ/dynareadout
  ***********************************************************************************
- * Copyright (c) 2022 PucklaMotzer09
+ * Copyright (c) 2022 Jonas Pucher
  *
  * This software is provided 'as-is', without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -27,7 +27,12 @@
 #include "profiling.h"
 #include <stdlib.h>
 
+#ifndef CDP
 #define CDP plot_file->control_data
+#endif
+#ifdef DT_PTR_SET
+#undef DT_PTR_SET
+#endif
 #define DT_PTR_SET(value)                                                      \
   if (plot_file->num_states == 1)                                              \
   plot_file->data_pointers[value] = plot_file->buffer.cur_word - state_start

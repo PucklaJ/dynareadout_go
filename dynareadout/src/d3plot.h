@@ -1,8 +1,8 @@
 /***********************************************************************************
  *                         This file is part of dynareadout
- *                    https://github.com/PucklaMotzer09/dynareadout
+ *                    https://github.com/PucklaJ/dynareadout
  ***********************************************************************************
- * Copyright (c) 2022 PucklaMotzer09
+ * Copyright (c) 2022 Jonas Pucher
  *
  * This software is provided 'as-is', without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -211,8 +211,6 @@ d3_word *_d3plot_read_ids(d3plot_file *plot_file, size_t *num_ids,
 /* Insert a sorted (ascending) array (src) into a sorted array (dst)*/
 d3_word *_insert_sorted(d3_word *dst, size_t dst_size, const d3_word *src,
                         size_t src_size);
-size_t _binary_search(const d3_word *arr, d3_word value, size_t start_index,
-                      size_t end_index);
 /* Deallocates all memory of a d3plot_part*/
 void d3plot_free_part(d3plot_part *part);
 /********************************/

@@ -1,7 +1,7 @@
 package dynareadout
 
 /*
-#include "dynareadout/src/binout.c"
+#include "dynareadout/src/binout.h"
 */
 import "C"
 
@@ -297,7 +297,7 @@ func (bin_file Binout) GetChildren(path string) []string {
 		childC := *(**C.char)(unsafe.Pointer(uintptr(unsafe.Pointer(childrenC)) + uintptr(i)*unsafe.Sizeof(*childrenC)))
 		children[i] = C.GoString(childC)
 	}
-	C.binout_free_children(childrenC, numChildren)
+	C.free(unsafe.Pointer(childrenC))
 
 	return children
 }
@@ -307,4 +307,17 @@ func (bin_file Binout) VariableExists(path string) bool {
 	defer C.free(unsafe.Pointer(pathC))
 
 	return C.binout_variable_exists(&bin_file.handle, pathC) != 0
+}
+
+func (bin_file Binout) GetNumTimesteps(path string) (uint64, error) {
+	pathC := C.CString(path)
+
+	timesteps := C.binout_get_num_timesteps(&bin_file.handle, pathC)
+	C.free(unsafe.Pointer(pathC))
+
+	if timesteps == math.MaxUint64 {
+		return 0, errors.New("The path does not exist or contains files")
+	}
+
+	return uint64(timesteps), nil
 }

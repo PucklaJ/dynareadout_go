@@ -1,7 +1,8 @@
 package dynareadout
 
 /*
-#include "dynareadout/src/d3plot.c"
+#include <stdlib.h>
+#include "dynareadout/src/d3plot.h"
 */
 import "C"
 

@@ -2,9 +2,10 @@ package dynareadout
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBinout(t *testing.T) {
@@ -27,23 +28,29 @@ func TestBinout(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, "metadata", children[0])
-	for i, child := range children[1:] {
+	assert.Equal(t, "metadata", children[len(children)-1])
+	for i, child := range children[:len(children)-1] {
 		assert.Equal(t, fmt.Sprintf("d%06d", i+1), child)
 	}
+
+	timesteps, err := binFile.GetNumTimesteps("/nodout")
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(601), timesteps)
+	_, err = binFile.GetNumTimesteps("/nodout/schinken")
+	assert.NotNil(t, err)
 
 	children = binFile.GetChildren("/nodout/metadata/")
 	if !assert.Len(t, children, 7) {
 		return
 	}
 
-	assert.Equal(t, "title", children[0])
-	assert.Equal(t, "version", children[1])
-	assert.Equal(t, "revision", children[2])
-	assert.Equal(t, "date", children[3])
-	assert.Equal(t, "legend", children[4])
-	assert.Equal(t, "legend_ids", children[5])
-	assert.Equal(t, "ids", children[6])
+	assert.Equal(t, "date", children[0])
+	assert.Equal(t, "ids", children[1])
+	assert.Equal(t, "legend", children[2])
+	assert.Equal(t, "legend_ids", children[3])
+	assert.Equal(t, "revision", children[4])
+	assert.Equal(t, "title", children[5])
+	assert.Equal(t, "version", children[6])
 
 	if !assert.True(t, binFile.VariableExists("/nodout/metadata/legend")) {
 		return
