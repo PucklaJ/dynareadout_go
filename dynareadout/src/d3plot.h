@@ -85,9 +85,6 @@ d3_word *d3plot_read_shell_element_ids(d3plot_file *plot_file, size_t *num_ids);
  * deallocated by free*/
 d3_word *d3plot_read_thick_shell_element_ids(d3plot_file *plot_file,
                                              size_t *num_ids);
-/* Read all ids of the solid, beam, shell and solid shell elements. The return
- * value needs to be deallocated by free*/
-d3_word *d3plot_read_all_element_ids(d3plot_file *plot_file, size_t *num_ids);
 /* Read all ids of the parts. The return value needs to be deallocated by free*/
 d3_word *d3plot_read_part_ids(d3plot_file *plot_file, size_t *num_parts);
 /* Returns an array containing null terminated strings for the part titles. Each
@@ -170,9 +167,14 @@ struct tm *d3plot_read_run_time(d3plot_file *plot_file);
  * over the array returned by d3plot_read_part_ids. The return value needs to be
  * deallocated by _d3plot_free_part*/
 d3plot_part d3plot_read_part(d3plot_file *plot_file, size_t part_index);
-/* Returns the index of id in the array ids. If it cannot be found then
- * UINT64_MAX will be returned.*/
-size_t d3plot_index_for_id(d3_word id, const d3_word *ids, size_t num_ids);
+/* The same as d3plot_read_part, but instead of an index into the parts, this
+ * function takes an id. You can supply this function with the part ids returned
+ * by d3plot_read_part_ids. If you set part_ids to NULL they will be read in
+ * this function call. Which means that if you intend to call this function
+ * multiple times, it is best to preload the part ids. The return value needs to
+ * be deallocated by _d3plot_free_part.*/
+d3plot_part d3plot_read_part_by_id(d3plot_file *plot_file, d3_word part_id,
+                                   const d3_word *part_ids, size_t num_parts);
 
 /***** Data sections *******/
 /* GEOMETRY DATA pg. 17*/
@@ -215,8 +217,23 @@ d3_word *_insert_sorted(d3_word *dst, size_t dst_size, const d3_word *src,
 void d3plot_free_part(d3plot_part *part);
 /********************************/
 
+/*********** Utility Functions ***************/
+/* These functions do some more computations *
+ * to reach their outputs, so be aware of    *
+ * that if you use them                      */
+
+/* Read all ids of the solid, beam, shell and solid shell elements. The return
+ * value needs to be deallocated by free*/
+d3_word *d3plot_read_all_element_ids(d3plot_file *plot_file, size_t *num_ids);
+/* Returns the index of id in the array ids. If it cannot be found then
+ * UINT64_MAX will be returned.*/
+size_t d3plot_index_for_id(d3_word id, const d3_word *ids, size_t num_ids);
+/*********************************************/
+
 #ifdef __cplusplus
 }
 #endif
+
+#include "d3plot_part_nodes.h"
 
 #endif
