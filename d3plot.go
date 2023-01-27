@@ -460,25 +460,12 @@ func (plotFile D3plot) ReadTitle() (string, error) {
 }
 
 func (plotFile D3plot) ReadPart(partIndex uint64) (D3plotPart, error) {
-	partC := C.d3plot_read_part(&plotFile.handle, C.size_t(partIndex))
-	if plotFile.handle.error_string != nil {
-		err := errors.New(C.GoString(plotFile.handle.error_string))
-		return D3plotPart{}, err
-	}
-
 	var part D3plotPart
 
-	if partC.num_solids != 0 {
-		part.SolidIDs = carrToSlice[C.d3_word, uint64](partC.solid_ids, partC.num_solids)
-	}
-	if partC.num_thick_shells != 0 {
-		part.ThickShellIDs = carrToSlice[C.d3_word, uint64](partC.thick_shell_ids, partC.num_thick_shells)
-	}
-	if partC.num_beams != 0 {
-		part.BeamIDs = carrToSlice[C.d3_word, uint64](partC.beam_ids, partC.num_beams)
-	}
-	if partC.num_shells != 0 {
-		part.ShellIDs = carrToSlice[C.d3_word, uint64](partC.shell_ids, partC.num_shells)
+	part.handle = C.d3plot_read_part(&plotFile.handle, C.size_t(partIndex))
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return part, err
 	}
 
 	return part, nil
@@ -493,25 +480,12 @@ func (plotFile D3plot) ReadPartByID(partID uint64, partIDs []uint64) (D3plotPart
 		cNumPartIDs = C.size_t(len(partIDs))
 	}
 
-	partC := C.d3plot_read_part_by_id(&plotFile.handle, C.d3_word(partID), cPartIDs, cNumPartIDs)
-	if plotFile.handle.error_string != nil {
-		err := errors.New(C.GoString(plotFile.handle.error_string))
-		return D3plotPart{}, err
-	}
-
 	var part D3plotPart
 
-	if partC.num_solids != 0 {
-		part.SolidIDs = carrToSlice[C.d3_word, uint64](partC.solid_ids, partC.num_solids)
-	}
-	if partC.num_thick_shells != 0 {
-		part.ThickShellIDs = carrToSlice[C.d3_word, uint64](partC.thick_shell_ids, partC.num_thick_shells)
-	}
-	if partC.num_beams != 0 {
-		part.BeamIDs = carrToSlice[C.d3_word, uint64](partC.beam_ids, partC.num_beams)
-	}
-	if partC.num_shells != 0 {
-		part.ShellIDs = carrToSlice[C.d3_word, uint64](partC.shell_ids, partC.num_shells)
+	part.handle = C.d3plot_read_part_by_id(&plotFile.handle, C.d3_word(partID), cPartIDs, cNumPartIDs)
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return part, err
 	}
 
 	return part, nil
