@@ -143,4 +143,24 @@ func TestD3plot(t *testing.T) {
 	timeValue, err = plotFile.ReadTime(19)
 	assert.Nil(t, err)
 	assert.Greater(t, 1e-6, math.Abs(timeValue-1.899986))
+
+	part, err := plotFile.ReadPart(1)
+	assert.Nil(t, err)
+	assert.Len(t, part.ShellIDs, 10)
+
+	part, err = plotFile.ReadPartByID(71000063, nil)
+	assert.Nil(t, err)
+
+	assert.Len(t, part.ShellIDs, 7368)
+	partNodeIDs, err := part.GetNodeIDs(plotFile)
+	assert.Nil(t, err)
+	assert.Len(t, partNodeIDs, 7370)
+
+	partNodeIndices, err := part.GetNodeIndices(plotFile)
+	assert.Nil(t, err)
+	assert.Len(t, partNodeIndices, len(partNodeIDs))
+
+	for i, ind := range partNodeIndices {
+		assert.True(t, partNodeIDs[i] == nodeIds[ind], i)
+	}
 }

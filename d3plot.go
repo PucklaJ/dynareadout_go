@@ -15,13 +15,6 @@ type D3plot struct {
 	handle C.d3plot_file
 }
 
-type D3plotPart struct {
-	SolidIDs      []uint64
-	ThickShellIDs []uint64
-	BeamIDs       []uint64
-	ShellIDs      []uint64
-}
-
 func D3plotOpen(fileName string) (plotFile D3plot, err error) {
 	fileNameC := C.CString(fileName)
 
@@ -488,7 +481,38 @@ func (plotFile D3plot) ReadPart(partIndex uint64) (D3plotPart, error) {
 		part.ShellIDs = carrToSlice[C.d3_word, uint64](partC.shell_ids, partC.num_shells)
 	}
 
-	C.d3plot_free_part(&partC)
+	return part, nil
+}
+
+func (plotFile D3plot) ReadPartByID(partID uint64, partIDs []uint64) (D3plotPart, error) {
+	var cPartIDs *C.d3_word
+	var cNumPartIDs C.size_t
+
+	if len(partIDs) != 0 {
+		cPartIDs = (*C.d3_word)(unsafe.Pointer(&partIDs[0]))
+		cNumPartIDs = C.size_t(len(partIDs))
+	}
+
+	partC := C.d3plot_read_part_by_id(&plotFile.handle, C.d3_word(partID), cPartIDs, cNumPartIDs)
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return D3plotPart{}, err
+	}
+
+	var part D3plotPart
+
+	if partC.num_solids != 0 {
+		part.SolidIDs = carrToSlice[C.d3_word, uint64](partC.solid_ids, partC.num_solids)
+	}
+	if partC.num_thick_shells != 0 {
+		part.ThickShellIDs = carrToSlice[C.d3_word, uint64](partC.thick_shell_ids, partC.num_thick_shells)
+	}
+	if partC.num_beams != 0 {
+		part.BeamIDs = carrToSlice[C.d3_word, uint64](partC.beam_ids, partC.num_beams)
+	}
+	if partC.num_shells != 0 {
+		part.ShellIDs = carrToSlice[C.d3_word, uint64](partC.shell_ids, partC.num_shells)
+	}
 
 	return part, nil
 }

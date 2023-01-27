@@ -78,7 +78,7 @@ func (bin_file Binout) ReadInt8(path string) ([]int8, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_int8_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_i8(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -95,7 +95,7 @@ func (bin_file Binout) ReadInt16(path string) ([]int16, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_int16_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_i16(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -112,7 +112,7 @@ func (bin_file Binout) ReadInt32(path string) ([]int32, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_int32_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_i32(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -129,7 +129,7 @@ func (bin_file Binout) ReadInt64(path string) ([]int64, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_int64_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_i64(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -146,7 +146,7 @@ func (bin_file Binout) ReadUint8(path string) ([]uint8, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_uint8_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_u8(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -163,7 +163,7 @@ func (bin_file Binout) ReadUint16(path string) ([]uint16, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_uint16_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_u16(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -180,7 +180,7 @@ func (bin_file Binout) ReadUint32(path string) ([]uint32, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_uint32_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_u32(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -197,7 +197,7 @@ func (bin_file Binout) ReadUint64(path string) ([]uint64, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_uint64_t(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_u64(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -214,7 +214,7 @@ func (bin_file Binout) ReadFloat32(path string) ([]float32, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_float(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_f32(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -231,7 +231,7 @@ func (bin_file Binout) ReadFloat64(path string) ([]float64, error) {
 	pathC := C.CString(path)
 
 	var dataSize C.size_t
-	dataC := C.binout_read_double(&bin_file.handle, pathC, &dataSize)
+	dataC := C.binout_read_f64(&bin_file.handle, pathC, &dataSize)
 	C.free(unsafe.Pointer(pathC))
 
 	if bin_file.handle.error_string != nil {
@@ -254,9 +254,9 @@ func (bin_file Binout) ReadString(path string) (string, error) {
 
 	switch typeID {
 	case BinoutTypeInt8:
-		dataC = unsafe.Pointer(C.binout_read_int8_t(&bin_file.handle, pathC, &dataSize))
+		dataC = unsafe.Pointer(C.binout_read_i8(&bin_file.handle, pathC, &dataSize))
 	case BinoutTypeUint8:
-		dataC = unsafe.Pointer(C.binout_read_uint8_t(&bin_file.handle, pathC, &dataSize))
+		dataC = unsafe.Pointer(C.binout_read_u8(&bin_file.handle, pathC, &dataSize))
 	default:
 		typeName := C.GoString(C._binout_get_type_name(C.uint64_t(typeID)))
 		return "", fmt.Errorf("Type \"%s\" can not be converted to a string", typeName)
