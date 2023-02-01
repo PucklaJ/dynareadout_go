@@ -1,2 +1,3 @@
 23.01
 884dfc10c812d54f9c4237d8fe5add3764c37c21
+slightly modified (segfault when loading node_ids in d3plot_part_get_node_ids fixed)
