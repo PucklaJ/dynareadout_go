@@ -4,8 +4,7 @@ package dynareadout
 #include <errno.h>
 #include <stdlib.h>
 #include "dynareadout/src/key.h"
-
-int get_errno() { return errno; }
+#include "header.h"
 */
 import "C"
 
@@ -14,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"unsafe"
+	"math"
 )
 
 const (
@@ -36,6 +36,8 @@ type Keyword struct {
 type Card struct {
 	handle *C.card_t
 }
+
+type KeyFileParseCallback func(string, *Card, int)
 
 func KeyFileParse(fileName string, parseIncludes bool) (Keywords, error) {
 	var keywords Keywords
@@ -271,6 +273,55 @@ func (c Card) ParseGetType() int {
 	return int(C.card_parse_get_type(c.handle))
 }
 
-func(c Card) ParseGetTypeWidth(valueWidth int) int {
+func (c Card) ParseGetTypeWidth(valueWidth int) int {
 	return int(C.card_parse_get_type_width(c.handle, C.uint8_t(valueWidth)))
+}
+
+func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, parseIncludes bool) error {
+	fileNameC := C.CString(fileName)
+	var parseIncludesC C.int
+	var errorString *C.char
+
+	if parseIncludes {
+		parseIncludesC = 1
+	} else {
+		parseIncludesC = 0
+	}
+
+	C.key_file_parse_with_callback(fileNameC,
+		C.key_file_callback(C.keyFileParseGoCallback),
+		parseIncludesC,
+		&errorString,
+		unsafe.Pointer(&callback),
+		nil,
+		nil)
+	C.free(unsafe.Pointer(fileNameC))
+
+	if errorString != nil {
+		errStr := C.GoString(errorString)
+		C.free(unsafe.Pointer(errorString))
+		return errors.New(errStr)
+	}
+
+	return nil
+}
+
+//export keyFileParseGoCallback
+func keyFileParseGoCallback(keywordNameC *C.char, cardC *C.card_t, cardIndexC C.size_t, userData unsafe.Pointer) {
+	callback := *(*KeyFileParseCallback)(userData)
+
+	keywordName := C.GoString(keywordNameC)
+	var card *Card
+	if cardC != nil {
+		card = new(Card)
+		card.handle = cardC
+	}
+	var cardIndex int
+	if cardIndexC == C.size_t(math.MaxUint64) {
+		cardIndex = math.MaxInt
+	} else {
+		cardIndex = int(cardIndexC)
+	}
+
+	callback(keywordName, card, cardIndex)
 }

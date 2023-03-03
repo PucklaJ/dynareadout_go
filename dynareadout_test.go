@@ -264,3 +264,17 @@ func TestKeyFile(t *testing.T) {
 	card.ParseNext()
 	assert.True(t, card.ParseDone())
 }
+
+func TestKeyFileParseWithCallback(t *testing.T) {
+	err := KeyFileParseWithCallback("test_data/key_file.k",
+		func(keywordName string, card *Card, cardIndex int) {
+			if card != nil {
+				fmt.Println("Keyword:", keywordName, "CardIndex:", cardIndex, "Card:", card.ParseWholeNoTrim())
+			} else {
+				fmt.Println("Keyword:", keywordName, "CardIndex:", cardIndex)
+			}
+		}, true)
+	if !assert.Nil(t, err) {
+		return
+	}
+}

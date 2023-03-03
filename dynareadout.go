@@ -16,5 +16,8 @@ package dynareadout
 #include "dynareadout/src/key.c"
 #include "dynareadout/src/path.c"
 #include "dynareadout/src/path_view.c"
+#include "header.h"
+
+int get_errno() { return errno; }
 */
 import "C"
