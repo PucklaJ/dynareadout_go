@@ -31,6 +31,8 @@
 #define PATH_VIEW_LEN(pv) (pv->end - pv->start + 1)
 #define PATH_VIEW_CPY(dst, src)                                                \
   memcpy(dst, &src->string[src->start], PATH_VIEW_LEN(src))
+#define PATH_VIEW_IS_AT_ROOT(pv)                                               \
+  (pv->start == pv->end && pv->string[pv->start] == PATH_SEP)
 
 /* A view into a string that always views one path element at one time.
  * Example:
@@ -65,15 +67,14 @@ typedef struct {
 extern "C" {
 #endif
 
-/* Create a new path view and start to view the first path element.*/
+/* Create a new path view and start to view the first path element. The string
+ * needs to be not null, be null-terminated and have at least a length of one.*/
 path_view_t path_view_new(const char *string);
 
 /* Advance to the next path element.
  * Returns 0 if it already is at the last element
- * and 1 otherwise.
- * This supports multiple PATH_SEPs in the middle of the path,
- * but multiple trailing or leading PATH_SEPs will lead to undefined behaviour.
- */
+ * and 1 otherwise. This supports multiple path separators at the beginning, in
+ * the middle and at the end.*/
 int path_view_advance(path_view_t *pv);
 
 /* Like strcmp but with the current element of the path view and a string*/

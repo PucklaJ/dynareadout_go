@@ -28,6 +28,9 @@
 #include "profiling.h"
 #include <stdlib.h>
 #include <string.h>
+#ifndef inline
+#define inline
+#endif
 #include <time.h>
 
 #define READ_CONTROL_DATA_PLOT_FILE_WORD(value)                                \
@@ -100,7 +103,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
   d3_buffer_skip_words(&plot_file.buffer, 1); /* TODO: Version*/
   READ_CONTROL_DATA_PLOT_FILE_WORD(ndim);
   READ_CONTROL_DATA_PLOT_FILE_WORD(numnp);
-  READ_CONTROL_DATA_PLOT_FILE_WORD(icode);
+  READ_CONTROL_DATA_WORD(icode);
   READ_CONTROL_DATA_PLOT_FILE_WORD(nglbv);
   READ_CONTROL_DATA_PLOT_FILE_WORD(it);
   READ_CONTROL_DATA_PLOT_FILE_WORD(iu);
@@ -138,11 +141,13 @@ d3plot_file d3plot_open(const char *root_file_name) {
   READ_CONTROL_DATA_PLOT_FILE_WORD(nmmat);
   d3_buffer_skip_words(&plot_file.buffer, 1); /* TODO: NUMFLUID*/
   d3_buffer_skip_words(&plot_file.buffer, 1); /* TODO: INN*/
-  READ_CONTROL_DATA_PLOT_FILE_WORD(npefg);
+  READ_CONTROL_DATA_WORD(npefg);
   READ_CONTROL_DATA_PLOT_FILE_WORD(nel48);
-  READ_CONTROL_DATA_PLOT_FILE_WORD(idtdt);
+  READ_CONTROL_DATA_WORD(idtdt);
   READ_CONTROL_DATA_WORD(extra);
   d3_buffer_skip_words(&plot_file.buffer, 6); /* TODO: WORDS*/
+
+  uint8_t mattyp;
 
   if (extra > 0) {
     READ_CONTROL_DATA_PLOT_FILE_WORD(nel20);
@@ -159,10 +164,10 @@ d3plot_file d3plot_open(const char *root_file_name) {
   }
 
   if (CDA.ndim == 5 || CDA.ndim == 7) {
-    CDA.mattyp = 1;
+    mattyp = 1;
     CDA.ndim = 3;
   } else {
-    CDA.mattyp = 0;
+    mattyp = 0;
     if (CDA.ndim == 3) {
       CDA.element_connectivity_packed = 1;
     } else {
@@ -185,13 +190,13 @@ d3plot_file d3plot_open(const char *root_file_name) {
     i++;
   }
 
-  if (_get_nth_digit(CDA.idtdt, 0) == 1) {
+  if (_get_nth_digit(idtdt, 0) == 1) {
     /* TODO: An array of dT/dt values of
              length NUMNP. Array is
              written after node temperature
              arrays.*/
   }
-  if (_get_nth_digit(CDA.idtdt, 1) == 1) {
+  if (_get_nth_digit(idtdt, 1) == 1) {
     /* TODO: An array of residual forces of
              length 3*NUMNP followed by
              residual moments of length
@@ -199,7 +204,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
              after node temperatures or
              dT/dt values if there are output.*/
   }
-  if (_get_nth_digit(CDA.idtdt, 2) == 1) {
+  if (_get_nth_digit(idtdt, 2) == 1) {
     /* TODO: Plastic strain tensor is written
              for each solid and shell after
              standard element data. For
@@ -211,7 +216,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
   } else {
     CDA.plastic_strain_tensor_written = 0;
   }
-  if (_get_nth_digit(CDA.idtdt, 3) == 1) {
+  if (_get_nth_digit(idtdt, 3) == 1) {
     /* TODO: Thermal strain tensor is written
              after standard element data. For
              solid (6 values) and shell (6
@@ -223,7 +228,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
   }
 
   if (CDA.plastic_strain_tensor_written || CDA.thermal_strain_tensor_written) {
-    CDA.istrn = _get_nth_digit(CDA.idtdt, 4);
+    CDA.istrn = _get_nth_digit(idtdt, 4);
   }
 
   /* Compute MDLOPT*/
@@ -239,7 +244,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
     ERROR_AND_RETURN_F("Invalid value for MAXINT: %ld", CDA.maxint);
   }
 
-  if (CDA.idtdt < 100) {
+  if (idtdt < 100) {
     /* We need to compute ISTRN*/
     /*ISTRN can only be computed as follows and if NV2D > 0.
       If NV2D-MAXINT*(6*IOSHL(1)+IOSHL(2)+NEIPS)+8*IOSHL(3)+4*IOSHL(4) > 1
@@ -274,9 +279,14 @@ d3plot_file d3plot_open(const char *root_file_name) {
     }
   }
 
+  if (icode != D3_CODE_OLD_DYNA3D &&
+      icode != D3_CODE_NIKE3D_LS_DYNA3D_LS_NIKE3D) {
+    ERROR_AND_RETURN("The given order of the elements is not supported");
+  }
+
   /* We are done with CONTROL DATA now comes the real data*/
 
-  if (CDA.mattyp) {
+  if (mattyp) {
     ERROR_AND_RETURN("MATERIAL TYPE DATA is not supported");
   }
   if (CDA.ialemat) {
@@ -286,7 +296,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
     ERROR_AND_RETURN(
         "SMOOTH PARTICLE HYDRODYNAMICS ELEMENT DATA FLAGS is not implemented");
   }
-  if (CDA.npefg) {
+  if (npefg) {
     ERROR_AND_RETURN("PARTICLE DATA is not implemented");
   }
 
@@ -315,7 +325,7 @@ d3plot_file d3plot_open(const char *root_file_name) {
                      "MATERIAL LIST is not implemented");
   }
 
-  if (CDA.npefg > 0) {
+  if (npefg > 0) {
     ERROR_AND_RETURN("PARTICLE GEOMETRY DATA is not implemented");
   }
 
@@ -1720,8 +1730,8 @@ d3plot_part d3plot_read_part_by_id(d3plot_file *plot_file, d3_word part_id,
 
   d3plot_part part;
 
-  d3_word *p_part_ids =
-      part_ids ? part_ids : d3plot_read_part_ids(plot_file, &num_parts);
+  d3_word *p_part_ids = part_ids ? (d3_word *)part_ids
+                                 : d3plot_read_part_ids(plot_file, &num_parts);
   if (plot_file->error_string) {
     END_PROFILE_FUNC();
     return part;

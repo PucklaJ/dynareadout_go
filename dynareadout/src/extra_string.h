@@ -23,44 +23,35 @@
  * 3. This notice may not be removed or altered from any source distribution.
  ************************************************************************************/
 
-#ifndef PATH_H
-#define PATH_H
-#include <stdlib.h>
-
-/* TODO: Make sure to use the correct PATH_SEP on windows when working with the
- * real file system*/
-#define PATH_SEP '/'
-#ifdef _WIN32
-#define REAL_PATH_SEP '\\'
-#else
-#define REAL_PATH_SEP '/'
-#endif
-
-#define PATH_IS_ABS(str) (str[0] == PATH_SEP)
+#ifndef EXTRA_STRING_H
+#define EXTRA_STRING_H
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define path_move_up(path) _path_move_up(path, PATH_SEP)
-#define path_move_up_real(path) _path_move_up(path, REAL_PATH_SEP)
+/* A string which allocates a part on the stack and allocates more on the heap
+ * if it needs "extra" memory*/
+#define EXTRA_STRING_BUFFER_SIZE (80 + 1)
+typedef struct {
+  char buffer[EXTRA_STRING_BUFFER_SIZE];
+  char *extra;
+} extra_string;
 
-/* Returns the index at which the new path string would end (index of PATH_SEP)
- * when moving up one folder. If no parent folder exists, then ~0 is returned.*/
-size_t _path_move_up(const char *path, char path_sep);
+char extra_string_get(const extra_string *str, size_t index);
 
-/* Join two paths together by inserting a PATH_SEP. Needs to be deallocated by
- * free*/
-char *path_join(const char *lhs, const char *rhs);
+void extra_string_set(extra_string *str, size_t index, char value);
 
-/* Returns wether the given path exists and is a file*/
-int path_is_file(const char *path_name);
+void extra_string_copy(extra_string *dst, const extra_string *src,
+                       size_t src_len, size_t offset);
 
-/* Returns the current working directory. Needs to be deallocated by free.*/
-char *path_working_directory();
+void extra_string_copy_to_string(char *dst, const extra_string *src,
+                                 size_t dst_len);
 
-/* Returns wether a path is absolute*/
-int path_is_abs(const char *path_name);
+int extra_string_compare(const extra_string *lhs, const char *rhs);
+
+int extra_string_starts_with(const extra_string *str, const char *prefix);
 
 #ifdef __cplusplus
 }
