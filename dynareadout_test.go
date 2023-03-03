@@ -9,7 +9,7 @@ import (
 )
 
 func TestBinout(t *testing.T) {
-	binFile, err := BinoutOpen("dynareadout/test_data/binout0*")
+	binFile, err := BinoutOpen("test_data/binout0*")
 	if !assert.Nil(t, err) {
 		return
 	}
@@ -97,7 +97,7 @@ func TestBinout(t *testing.T) {
 }
 
 func TestD3plot(t *testing.T) {
-	plotFile, err := D3plotOpen("dynareadout/test_data/d3plot")
+	plotFile, err := D3plotOpen("test_data/d3plot")
 	if !assert.Nil(t, err) {
 		return
 	}
@@ -165,4 +165,102 @@ func TestD3plot(t *testing.T) {
 	for i, ind := range partNodeIndices {
 		assert.True(t, partNodeIDs[i] == nodeIds[ind], i)
 	}
+}
+
+func TestKeyFile(t *testing.T) {
+	keywords, err := KeyFileParse("test_data/key_file.k", true)
+	if !assert.Nil(t, err) {
+		return
+	}
+	defer keywords.Free()
+
+	parts, err := keywords.GetSlice("PART")
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	if !assert.Len(t, parts, 2) {
+		return
+	}
+
+	title := parts[0].GetSlice()[0]
+	assert.Equal(t, "Cube", title.ParseWhole())
+
+	title = parts[1].GetSlice()[0]
+	assert.Equal(t, "Ground", title.ParseWhole())
+
+	card := parts[0].Get(1)
+
+	card.ParseBegin(DefaultValueWidth)
+	v, err := card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 71000063, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 71000063, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 6, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 0, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 0, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 0, v)
+	card.ParseNext()
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 0, v)
+	card.ParseNext()
+	_, err = card.ParseInt()
+	assert.NotNil(t, err)
+	card.ParseNext()
+	assert.True(t, card.ParseDone())
+
+	keyword, err := keywords.Get("SET_NODE_LIST_TITLE", 0)
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	card = keyword.Get(1)
+
+	card.ParseBegin(DefaultValueWidth)
+	assert.Equal(t, CardParseInt, card.ParseGetType())
+	v, err = card.ParseInt()
+	assert.Nil(t, err)
+	assert.Equal(t, 1, v)
+	card.ParseNext()
+	assert.Equal(t, CardParseFloat, card.ParseGetType())
+	vf, err := card.ParseFloat64()
+	assert.Nil(t, err)
+	assert.Equal(t, 0.0, vf)
+	card.ParseNext()
+	assert.Equal(t, CardParseFloat, card.ParseGetType())
+	vf, err = card.ParseFloat64()
+	assert.Nil(t, err)
+	assert.Equal(t, 0.0, vf)
+	card.ParseNext()
+	assert.Equal(t, CardParseFloat, card.ParseGetType())
+	vf, err = card.ParseFloat64()
+	assert.Nil(t, err)
+	assert.Equal(t, 0.0, vf)
+	card.ParseNext()
+	assert.Equal(t, CardParseFloat, card.ParseGetType())
+	vf, err = card.ParseFloat64()
+	assert.Nil(t, err)
+	assert.Equal(t, 0.0, vf)
+	card.ParseNext()
+	assert.Equal(t, CardParseString, card.ParseGetType())
+	vStr := card.ParseString()
+	assert.Equal(t, "MECH", vStr)
+	card.ParseNext()
+	assert.True(t, card.ParseDone())
 }

@@ -1,4 +1,4 @@
 .*
 !.gitignore
 !.gitmodules
-dynareadout/test_data/
+test_data/
