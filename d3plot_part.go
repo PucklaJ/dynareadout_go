@@ -51,7 +51,7 @@ func (part D3plotPart) Free() {
 
 func (part D3plotPart) GetNodeIDs(plotFile D3plot) ([]uint64, error) {
 	var numPartNodeIDs C.size_t
-	dataC := C.d3plot_part_get_node_ids(&plotFile.handle, &part.handle, &numPartNodeIDs, nil)
+	dataC := C.d3plot_part_get_node_ids2(&plotFile.handle, &part.handle, &numPartNodeIDs, nil, 0, nil, 0, nil, 0, nil, 0, nil, 0, nil, nil, nil, nil)
 
 	if plotFile.handle.error_string != nil {
 		err := errors.New(C.GoString(plotFile.handle.error_string))
@@ -65,7 +65,7 @@ func (part D3plotPart) GetNodeIDs(plotFile D3plot) ([]uint64, error) {
 
 func (part D3plotPart) GetNodeIndices(plotFile D3plot) ([]uint64, error) {
 	var numPartNodeIDs C.size_t
-	dataC := C.d3plot_part_get_node_indices(&plotFile.handle, &part.handle, &numPartNodeIDs, nil)
+	dataC := C.d3plot_part_get_node_indices2(&plotFile.handle, &part.handle, &numPartNodeIDs, nil, 0, nil, 0, nil, 0, nil, 0, nil, nil, nil, nil)
 
 	if plotFile.handle.error_string != nil {
 		err := errors.New(C.GoString(plotFile.handle.error_string))

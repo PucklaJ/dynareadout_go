@@ -1,6 +1,7 @@
 package dynareadout
 
 /*
+#cgo LDFLAGS: -lm
 #include "dynareadout/src/binary_search.c"
 #include "dynareadout/src/binout.c"
 #include "dynareadout/src/binout_directory.c"
@@ -11,6 +12,8 @@ package dynareadout
 #include "dynareadout/src/d3plot_data.c"
 #include "dynareadout/src/d3plot_part_nodes.c"
 #include "dynareadout/src/d3plot_state.c"
+#include "dynareadout/src/extra_string.c"
+#include "dynareadout/src/key.c"
 #include "dynareadout/src/path.c"
 #include "dynareadout/src/path_view.c"
 */
