@@ -12,8 +12,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"unsafe"
 	"math"
+	"unsafe"
 )
 
 const (

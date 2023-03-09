@@ -273,6 +273,56 @@ func (bin_file Binout) ReadString(path string) (string, error) {
 	return str, nil
 }
 
+func (bin_file Binout) ReadTimedFloat32(path string) ([][]float32, error) {
+	var numValues C.size_t
+	var numTimesteps C.size_t
+	pathC := C.CString(path)
+
+	dataC := C.binout_read_timed_f32(&bin_file.handle, pathC, &numValues, &numTimesteps)
+	C.free(unsafe.Pointer(pathC))
+
+	if bin_file.handle.error_string != nil {
+		err := errors.New(C.GoString(bin_file.handle.error_string))
+		return nil, err
+	}
+
+	data := make([][]float32, numTimesteps)
+	for i := range data {
+		data[i] = make([]float32, numValues)
+		for j := range data[i] {
+			data[i][j] = float32(carrIdx(dataC, i*int(numValues)+j))
+		}
+	}
+
+	C.free(unsafe.Pointer(dataC))
+	return data, nil
+}
+
+func (bin_file Binout) ReadTimedFloat64(path string) ([][]float64, error) {
+	var numValues C.size_t
+	var numTimesteps C.size_t
+	pathC := C.CString(path)
+
+	dataC := C.binout_read_timed_f64(&bin_file.handle, pathC, &numValues, &numTimesteps)
+	C.free(unsafe.Pointer(pathC))
+
+	if bin_file.handle.error_string != nil {
+		err := errors.New(C.GoString(bin_file.handle.error_string))
+		return nil, err
+	}
+
+	data := make([][]float64, numTimesteps)
+	for i := range data {
+		data[i] = make([]float64, numValues)
+		for j := range data[i] {
+			data[i][j] = float64(carrIdx(dataC, i*int(numValues)+j))
+		}
+	}
+
+	C.free(unsafe.Pointer(dataC))
+	return data, nil
+}
+
 func (bin_file Binout) GetTypeID(path string) uint64 {
 	pathC := C.CString(path)
 
