@@ -371,3 +371,22 @@ func (bin_file Binout) GetNumTimesteps(path string) (uint64, error) {
 
 	return uint64(timesteps), nil
 }
+
+func (bin_file Binout) SimplePathToReal(simple string) (string, int, bool, error) {
+	var typeID C.uint8_t
+	var timed C.int
+	simpleC := C.CString(simple)
+
+	realC := C.binout_simple_path_to_real(&bin_file.handle, simpleC, &typeID, &timed)
+	C.free(unsafe.Pointer(simpleC))
+
+	if realC == nil {
+		err := fmt.Errorf("The simple path \"%s\" does not exist", simple)
+		return "", 0, false, err
+	}
+
+	real := C.GoString(realC)
+	C.free(unsafe.Pointer(realC))
+
+	return real, int(typeID), timed != 0, nil
+}
