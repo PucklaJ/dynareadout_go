@@ -94,6 +94,17 @@ func TestBinout(t *testing.T) {
 	assert.Len(t, title, 80)
 
 	assert.Equal(t, "Pouch_macro_37Ah                                                                ", title)
+
+	realPath, typeID, timed, err := binFile.SimplePathToReal("nodout/x_displacement")
+	assert.Nil(t, err)
+	assert.Equal(t, "/nodout/x_displacement", realPath)
+	assert.Equal(t, BinoutTypeFloat32, typeID)
+	assert.True(t, timed)
+
+	yDisp, err := binFile.ReadTimedFloat32("/nodout/y_displacement")
+	assert.Nil(t, err)
+	assert.Len(t, yDisp, 601)
+	assert.Len(t, yDisp[0], 1)
 }
 
 func TestD3plot(t *testing.T) {
