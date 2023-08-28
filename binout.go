@@ -347,7 +347,7 @@ func (bin_file Binout) GetChildren(path string) []string {
 		childC := *(**C.char)(unsafe.Pointer(uintptr(unsafe.Pointer(childrenC)) + uintptr(i)*unsafe.Sizeof(*childrenC)))
 		children[i] = C.GoString(childC)
 	}
-	C.free(unsafe.Pointer(childrenC))
+	C.binout_free_children(childrenC)
 
 	return children
 }

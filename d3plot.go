@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"errors"
+	"time"
 	"unsafe"
 )
 
@@ -183,6 +184,7 @@ func (plotFile D3plot) ReadPartTitles() ([]string, error) {
 	return titles, nil
 }
 
+// TODO: Implement bindings for the 32-Bit variants
 func (plotFile D3plot) ReadNodeCoordinates(state uint64) ([][3]float64, error) {
 	var numNodes C.size_t
 	dataC := C.d3plot_read_node_coordinates(&plotFile.handle, C.size_t(state), &numNodes)
@@ -203,6 +205,38 @@ func (plotFile D3plot) ReadNodeCoordinates(state uint64) ([][3]float64, error) {
 		coords[i][0] = float64(*nodePtr)
 		coords[i][1] = float64(carrIdx(nodePtr, 1))
 		coords[i][2] = float64(carrIdx(nodePtr, 2))
+	}
+	C.free(unsafe.Pointer(dataC))
+
+	return coords, nil
+}
+
+func (plotFile D3plot) ReadAllNodeCoordinates() ([][][3]float64, error) {
+	var numNodes, numTimeSteps C.size_t
+	dataC := C.d3plot_read_all_node_coordinates(&plotFile.handle, &numNodes, &numTimeSteps)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return nil, err
+	}
+
+	if numNodes == 0 || numTimeSteps == 0 {
+		return [][][3]float64{}, nil
+	}
+
+	coords := make([][][3]float64, numTimeSteps)
+	for t := range coords {
+		timeStep := make([][3]float64, numNodes)
+
+		for n := range timeStep {
+			nodePtr := carrIdxPtr(dataC, t*int(numNodes)*3+n*3)
+
+			timeStep[n][0] = float64(*nodePtr)
+			timeStep[n][1] = float64(carrIdx(nodePtr, 1))
+			timeStep[n][2] = float64(carrIdx(nodePtr, 2))
+		}
+
+		coords = append(coords, timeStep)
 	}
 	C.free(unsafe.Pointer(dataC))
 
@@ -235,6 +269,38 @@ func (plotFile D3plot) ReadNodeVelocity(state uint64) ([][3]float64, error) {
 	return vel, nil
 }
 
+func (plotFile D3plot) ReadAllNodeVelocity() ([][][3]float64, error) {
+	var numNodes, numTimeSteps C.size_t
+	dataC := C.d3plot_read_all_node_velocity(&plotFile.handle, &numNodes, &numTimeSteps)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return nil, err
+	}
+
+	if numNodes == 0 || numTimeSteps == 0 {
+		return [][][3]float64{}, nil
+	}
+
+	velocities := make([][][3]float64, numTimeSteps)
+	for t := range velocities {
+		timeStep := make([][3]float64, numNodes)
+
+		for n := range timeStep {
+			nodePtr := carrIdxPtr(dataC, t*int(numNodes)*3+n*3)
+
+			timeStep[n][0] = float64(*nodePtr)
+			timeStep[n][1] = float64(carrIdx(nodePtr, 1))
+			timeStep[n][2] = float64(carrIdx(nodePtr, 2))
+		}
+
+		velocities = append(velocities, timeStep)
+	}
+	C.free(unsafe.Pointer(dataC))
+
+	return velocities, nil
+}
+
 func (plotFile D3plot) ReadNodeAcceleration(state uint64) ([][3]float64, error) {
 	var numNodes C.size_t
 	dataC := C.d3plot_read_node_acceleration(&plotFile.handle, C.size_t(state), &numNodes)
@@ -261,6 +327,38 @@ func (plotFile D3plot) ReadNodeAcceleration(state uint64) ([][3]float64, error) 
 	return acc, nil
 }
 
+func (plotFile D3plot) ReadAllNodeAcceleration() ([][][3]float64, error) {
+	var numNodes, numTimeSteps C.size_t
+	dataC := C.d3plot_read_all_node_acceleration(&plotFile.handle, &numNodes, &numTimeSteps)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return nil, err
+	}
+
+	if numNodes == 0 || numTimeSteps == 0 {
+		return [][][3]float64{}, nil
+	}
+
+	accelerations := make([][][3]float64, numTimeSteps)
+	for t := range accelerations {
+		timeStep := make([][3]float64, numNodes)
+
+		for n := range timeStep {
+			nodePtr := carrIdxPtr(dataC, t*int(numNodes)*3+n*3)
+
+			timeStep[n][0] = float64(*nodePtr)
+			timeStep[n][1] = float64(carrIdx(nodePtr, 1))
+			timeStep[n][2] = float64(carrIdx(nodePtr, 2))
+		}
+
+		accelerations = append(accelerations, timeStep)
+	}
+	C.free(unsafe.Pointer(dataC))
+
+	return accelerations, nil
+}
+
 func (plotFile D3plot) ReadTime(state uint64) (float64, error) {
 	timeC := C.d3plot_read_time(&plotFile.handle, C.size_t(state))
 	if plotFile.handle.error_string != nil {
@@ -269,6 +367,24 @@ func (plotFile D3plot) ReadTime(state uint64) (float64, error) {
 	}
 
 	return float64(timeC), nil
+}
+
+func (plotFile D3plot) ReadAllTime() ([]float64, error) {
+	var numStates C.size_t
+	dataC := C.d3plot_read_all_time(&plotFile.handle, &numStates)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return nil, err
+	}
+
+	times := make([]float64, numStates)
+	for t := range times {
+		times[t] = float64(carrIdx(dataC, t))
+	}
+	C.free(unsafe.Pointer(dataC))
+
+	return times, nil
 }
 
 func (plotFile D3plot) ReadSolidsState(state uint64) ([]C.d3plot_solid, error) {
@@ -293,6 +409,7 @@ func (plotFile D3plot) ReadSolidsState(state uint64) ([]C.d3plot_solid, error) {
 	return solids, nil
 }
 
+// TODO: Make separate struct to wrap around c type so that history variables can be read
 func (plotFile D3plot) ReadThickShellsState(state uint64) ([]C.d3plot_thick_shell, error) {
 	var numThickShells, numHistoryVariables C.size_t
 	dataC := C.d3plot_read_thick_shells_state(&plotFile.handle, C.size_t(state), &numThickShells, &numHistoryVariables)
@@ -337,6 +454,7 @@ func (plotFile D3plot) ReadBeamsState(state uint64) ([]C.d3plot_beam, error) {
 	return beams, nil
 }
 
+// TODO: Make separate struct to wrap around c type so that history variables can be read
 func (plotFile D3plot) ReadShellsState(state uint64) ([]C.d3plot_shell, error) {
 	var numShells, numHistoryVariables C.size_t
 	dataC := C.d3plot_read_shells_state(&plotFile.handle, C.size_t(state), &numShells, &numHistoryVariables)
@@ -457,6 +575,27 @@ func (plotFile D3plot) ReadTitle() (string, error) {
 	title := C.GoString(titleC)
 	C.free(unsafe.Pointer(titleC))
 	return title, nil
+}
+
+func (plotFile D3plot) ReadRunTime() (time.Time, error) {
+	dataC := C.d3plot_read_run_time(&plotFile.handle)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return time.Time{}, err
+	}
+
+	t := time.Date(
+		int(dataC.tm_year+1900),
+		time.Month(dataC.tm_mon+1),
+		int(dataC.tm_mday),
+		int(dataC.tm_hour),
+		int(dataC.tm_min),
+		int(dataC.tm_sec),
+		0,
+		time.UTC,
+	)
+	return t, nil
 }
 
 func (plotFile D3plot) ReadPart(partIndex uint64) (D3plotPart, error) {

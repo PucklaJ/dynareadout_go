@@ -76,3 +76,29 @@ func (part D3plotPart) GetNodeIndices(plotFile D3plot) ([]uint64, error) {
 
 	return data, nil
 }
+
+func (part D3plotPart) GetNumNodes(plotFile D3plot) (int, error) {
+	numNodes := C.d3plot_part_get_num_nodes2(
+		&plotFile.handle,
+		&part.handle,
+		nil,
+		0,
+		nil,
+		0,
+		nil,
+		0,
+		nil,
+		0,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	if plotFile.handle.error_string != nil {
+		err := errors.New(C.GoString(plotFile.handle.error_string))
+		return 0, err
+	}
+
+	return int(numNodes), nil
+}
