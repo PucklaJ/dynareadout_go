@@ -64,7 +64,12 @@
   bin_file->error_string = malloc(message_length + 1);                         \
   memcpy(bin_file->error_string, message, message_length + 1);
 
-#define CLEAR_BINOUT_ERROR_STRING()                                            \
+#define NEW_ERROR_STRING_F(format_str, ...)                                    \
+  char format_buffer[1024];                                                    \
+  sprintf(format_buffer, format_str, __VA_ARGS__);                             \
+  NEW_ERROR_STRING(format_buffer);
+
+#define BINOUT_CLEAR_ERROR_STRING()                                            \
   free(bin_file->error_string);                                                \
   bin_file->error_string = NULL;
 

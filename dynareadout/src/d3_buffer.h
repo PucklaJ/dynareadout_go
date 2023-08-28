@@ -25,16 +25,30 @@
 
 #ifndef D3_BUFFER_H
 #define D3_BUFFER_H
+#include "multi_file.h"
 #include <stdint.h>
 #include <stdio.h>
 
+typedef struct {
+  multi_file_index_t multi_file_index;
+  size_t cur_file;
+  size_t cur_word;
+} d3_pointer;
+
+typedef struct {
+  char index_string[4];
+  uint64_t file_size;
+  multi_file_t file;
+} d3_file;
+
 /* Represents a whole family of d3 files*/
 typedef struct {
-  FILE **file_handles;
-  size_t *file_sizes;
-  size_t num_file_handles;
-  size_t cur_file_handle;
-  size_t cur_word;
+  char *root_file_name;
+  size_t root_file_name_length;
+  d3_file *files;
+  size_t num_files;
+  size_t first_open_file;
+  size_t last_open_file;
 
   uint8_t word_size; /* 4 byte for single precision and 8 byte for double
                         precision*/
@@ -53,26 +67,38 @@ void d3_buffer_close(d3_buffer *buffer);
 /* Read a given number of words from the current position. words already needs
  * to be allocated with at least num_words*word_size bytes. Sets error_string on
  * error*/
-void d3_buffer_read_words(d3_buffer *buffer, void *words, size_t num_words);
+void d3_buffer_read_words(d3_buffer *buffer, d3_pointer *ptr, void *words,
+                          size_t num_words);
 /* Read a given number of words from the given position. words already needs
  * to be allocated with at least num_words*word_size bytes. Sets error_string on
  * error*/
-void d3_buffer_read_words_at(d3_buffer *buffer, void *words, size_t num_words,
-                             size_t word_pos);
+d3_pointer d3_buffer_read_words_at(d3_buffer *buffer, void *words,
+                                   size_t num_words, size_t word_pos);
 /* Sets error_string on error*/
-void d3_buffer_read_double_word(d3_buffer *buffer, double *word);
+void d3_buffer_read_double_word(d3_buffer *buffer, d3_pointer *ptr,
+                                double *word);
 /* Sets error_string on error*/
-void d3_buffer_read_vec3(d3_buffer *buffer, double *words);
+void d3_buffer_read_vec3(d3_buffer *buffer, d3_pointer *ptr, double *words);
 /* Skip an arbitrary amount of words. Also handles skips across multiple files.
  * Sets error_string on error*/
-void d3_buffer_skip_words(d3_buffer *buffer, size_t num_words);
+void d3_buffer_skip_words(d3_buffer *buffer, d3_pointer *ptr, size_t num_words);
 /* Similar to d3_buffer_skip_words, but it skips bytes instead of words. Try to
  * use the words one. This function ist just for some cases where the number of
  * bytes is always the same no matter what the words size is*/
-void d3_buffer_skip_bytes(d3_buffer *buffer, size_t num_bytes);
+void d3_buffer_skip_bytes(d3_buffer *buffer, d3_pointer *ptr, size_t num_bytes);
 /* Skip to the next file. Especially needed a the end of the first file when
  * done with all the headers. Sets error_string on error*/
-int d3_buffer_next_file(d3_buffer *buffer);
+int d3_buffer_next_file(d3_buffer *buffer, d3_pointer *ptr);
+/* Jumps to the word position indicated by word pos*/
+d3_pointer d3_buffer_seek(d3_buffer *buffer, size_t word_pos);
+
+void d3_pointer_close(d3_buffer *buffer, d3_pointer *ptr);
+
+#ifdef THREAD_SAFE
+/* Panic and close all open file handles of all multi files that are currently
+ * unused*/
+void _d3_buffer_kill_idle_files(d3_buffer *buffer);
+#endif
 
 #ifdef __cplusplus
 }

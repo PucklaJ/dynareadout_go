@@ -26,7 +26,7 @@
 #ifndef KEY_H
 #define KEY_H
 
-#include <stddef.h>
+#include "extra_string.h"
 #include <stdint.h>
 
 #define DEFAULT_VALUE_WIDTH 10
@@ -56,8 +56,21 @@ typedef struct {
   size_t num_cards; /* The number of cards in the array*/
 } keyword_t;
 
+/* Contains options to configure how a key file is parsed*/
+typedef struct {
+  int parse_includes; /* Wether to parse supported INCLUDE keywords and
+                         recursively parse those files. Default: 1*/
+  int ignore_not_found_includes; /* Wether to not parse and not output an error
+                                   when not finding an include file. Default:
+                                   0*/
+} key_parse_config_t;
+
+/* Returns a key_parse_config_t with all values set to the default*/
+key_parse_config_t key_default_parse_config();
+
 /* The type of the callback that is called in key_file_parse_with_callback*/
-typedef void (*key_file_callback)(const char *keyword_name, const card_t *card,
+typedef void (*key_file_callback)(const char *file_name, size_t line_number,
+                                  const char *keyword_name, card_t *card,
                                   size_t card_index, void *user_data);
 
 #ifdef __cplusplus
@@ -67,24 +80,28 @@ extern "C" {
 /* Parses a LS Dyna key file for keywords and their respective cards. Returns an
  * array of keyword_t and sets num_keywords to the number of elements in the
  * array. Needs to be deallocated by key_file_free.
- * parse_includes: tells the function wether to parse include files via the
- * *INCLUDE and similar keywords or if they should be added as regular keywords
- * to the array.
+ * parse_config: Configure how the file is parsed
  * error_string: if set to a non NULL value a error message will be set that
  * tells about an error if one occurred. If it gets set to a non NULL value it
- * needs to be deallocated by free.*/
+ * needs to be deallocated by free.
+ * warning_string: if set to a non NULL value warning messages that are
+ * generated during parsing will be stored here. If it gets set to a non NULL
+ * value it needs to deallocated by free.*/
 keyword_t *key_file_parse(const char *file_name, size_t *num_keywords,
-                          int parse_includes, char **error_string);
+                          const key_parse_config_t *parse_config,
+                          char **error_string, char **warning_string);
 /* Same as key_file_parse, but instead of returning an array it calls an
  * callback every time a card (or empty keyword) is encountered.
  * user_data: will be given to the callback untouched.
- * include_paths and num_include_paths: this is only used for recursion and both
- * should be set to NULL*/
+ * include_paths, num_include_paths, root_folder: these are only used for
+ * recursion and should be set to NULL*/
 void key_file_parse_with_callback(const char *file_name,
                                   key_file_callback callback,
-                                  int parse_includes, char **error_string,
+                                  const key_parse_config_t *parse_config,
+                                  char **error_string, char **warning_string,
                                   void *user_data, char ***include_paths,
-                                  size_t *num_include_paths);
+                                  size_t *num_include_paths,
+                                  const char *root_folder);
 /* Deallocates the data returned by key_file_parse*/
 void key_file_free(keyword_t *keywords, size_t num_keywords);
 /* Returns a certain keyword with name. If the key file contains more keywords
@@ -127,19 +144,28 @@ void card_parse_next_width(card_t *card, uint8_t value_width);
  * widths have been supplied*/
 int card_parse_done(const card_t *card);
 /* Parses the current value as an int. Uses the value width from
- * card_parse_begin.*/
+ * card_parse_begin. Note: This does not handle overflow, since the width of key
+ * file values is too small to reach the maximum of int64_t*/
 int64_t card_parse_int(const card_t *card);
-/* Parses the current value as an int. Uses the value width provided here.*/
+/* Parses the current value as an int. Uses the value width provided here. Note:
+ * This does not handle overflow, since the width of key file values is too
+ * small to reach the maximum of int64_t*/
 int64_t card_parse_int_width(const card_t *card, uint8_t value_width);
 /* Parses the current value as an float. Uses the value width from
- * card_parse_begin.*/
+ * card_parse_begin. Note: This does not handle overflow, since the width of key
+ * file values is too small to reach the maximum of float*/
 float card_parse_float32(const card_t *card);
-/* Parses the current value as an float. Uses the value width provided here.*/
+/* Parses the current value as an float. Uses the value width provided here.
+ * Note: This does not handle overflow, since the width of key file values is
+ * too small to reach the maximum of float*/
 float card_parse_float32_width(const card_t *card, uint8_t value_width);
 /* Parses the current value as an double. Uses the value width from
- * card_parse_begin.*/
+ * card_parse_begin. Note: This does not handle overflow, since the width of key
+ * file values is too small to reach the maximum of double*/
 double card_parse_float64(const card_t *card);
-/* Parses the current value as an double. Uses the value width provided here.*/
+/* Parses the current value as an double. Uses the value width provided here.
+ * Note: This does not handle overflow, since the width of key file values is
+ * too small to reach the maximum of double*/
 double card_parse_float64_width(const card_t *card, uint8_t value_width);
 /* Parses the current value as an string (which means no parsing at all).
  * Trims trailing and leading spaces. Uses the value width from
@@ -178,6 +204,24 @@ card_parse_type card_parse_get_type(const card_t *card);
  * the value width provided here.*/
 card_parse_type card_parse_get_type_width(const card_t *card,
                                           uint8_t value_width);
+
+/* ----- Private Functions -----*/
+/* Copy the contents of the card as a string directly into dst.*/
+void _card_cpy(const card_t *card, char *dst, size_t len);
+/* Handles the parsing of multi line string for include file names. Returns
+ * wether the multi line string has been completely parsed.*/
+int _parse_multi_line_string(char **multi_line_string, size_t *multi_line_index,
+                             const card_t *card, size_t line_length);
+void _parse_include_file_name_card(
+    const card_t *card, size_t *card_index, const extra_string *line,
+    size_t line_length, char **current_multi_line_string,
+    size_t *current_multi_line_index, size_t *num_include_paths,
+    char ***include_paths, key_file_callback callback, void *user_data,
+    char **error_stack, size_t *error_stack_size, size_t *error_ptr,
+    char **warning_stack, size_t *warning_stack_size, size_t *warning_ptr,
+    const char *file_name, size_t line_count, const char *root_folder,
+    const key_parse_config_t *parse_config);
+/* -----------------------------*/
 
 #ifdef __cplusplus
 }

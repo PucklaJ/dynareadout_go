@@ -160,6 +160,35 @@ int path_is_file(const char *path_name) {
 #endif
 
 #ifdef _WIN32
+int path_is_directory(const char *path_name) {
+  BEGIN_PROFILE_FUNC();
+
+  const DWORD attrib = GetFileAttributes(path_name);
+
+  const int rv = (attrib != INVALID_FILE_ATTRIBUTES &&
+                  (attrib & FILE_ATTRIBUTE_DIRECTORY));
+
+  END_PROFILE_FUNC();
+  return rv;
+}
+#else
+int path_is_directory(const char *path_name) {
+  BEGIN_PROFILE_FUNC();
+
+  struct stat path_stat;
+  if (stat(path_name, &path_stat) != 0) {
+    END_PROFILE_FUNC();
+    return 0;
+  }
+
+  const int rv = S_ISDIR(path_stat.st_mode);
+
+  END_PROFILE_FUNC();
+  return rv;
+}
+#endif
+
+#ifdef _WIN32
 char *path_working_directory() {
   BEGIN_PROFILE_FUNC();
 
@@ -215,3 +244,32 @@ int path_is_abs(const char *path_name) {
   END_PROFILE_FUNC();
   return rv;
 }
+
+#ifdef _WIN32
+uint64_t path_get_file_size(const char *path_name) {
+  BEGIN_PROFILE_FUNC();
+
+  ULONGLONG file_size = 0;
+  WIN32_FILE_ATTRIBUTE_DATA file_info;
+  if (GetFileAttributesEx(path_name, GetFileExInfoStandard, &file_info)) {
+    file_size =
+        ((ULONGLONG)file_info.nFileSizeHigh << 32) | file_info.nFileSizeLow;
+  }
+
+  END_PROFILE_FUNC();
+  return (uint64_t)file_size;
+}
+#else
+uint64_t path_get_file_size(const char *path_name) {
+  BEGIN_PROFILE_FUNC();
+
+  uint64_t size = 0;
+  struct stat st;
+  if (stat(path_name, &st) == 0) {
+    size = (uint64_t)st.st_size;
+  }
+
+  END_PROFILE_FUNC();
+  return size;
+}
+#endif

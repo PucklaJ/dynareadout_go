@@ -34,7 +34,7 @@ d3_word *d3plot_part_get_node_ids2(
     const d3plot_beam_con *beam_cons, const d3plot_shell_con *shell_cons,
     const d3plot_thick_shell_con *thick_shell_cons) {
   BEGIN_PROFILE_FUNC();
-  CLEAR_ERROR_STRING();
+  D3PLOT_CLEAR_ERROR_STRING();
 
   uint8_t node_ids_loaded = 0;
 
@@ -85,7 +85,7 @@ d3_word *d3plot_part_get_node_indices2(
     const d3plot_shell_con *shell_cons,
     const d3plot_thick_shell_con *thick_shell_cons) {
   BEGIN_PROFILE_FUNC();
-  CLEAR_ERROR_STRING();
+  D3PLOT_CLEAR_ERROR_STRING();
 
   const size_t part_node_indices_cap =
       part->num_solids * 8 + part->num_beams * 2 + part->num_shells * 4 +
@@ -106,4 +106,82 @@ d3_word *d3plot_part_get_node_indices2(
 
   END_PROFILE_FUNC();
   return part_node_indices;
+}
+
+size_t d3plot_part_get_num_nodes2(
+    d3plot_file *plot_file, const d3plot_part *part, const d3_word *solid_ids,
+    size_t num_solids, const d3_word *beam_ids, size_t num_beams,
+    const d3_word *shell_ids, size_t num_shells, const d3_word *thick_shell_ids,
+    size_t num_thick_shells, const d3plot_solid_con *solid_cons,
+    const d3plot_beam_con *beam_cons, const d3plot_shell_con *shell_cons,
+    const d3plot_thick_shell_con *thick_shell_cons) {
+  BEGIN_PROFILE_FUNC();
+
+  size_t num_part_node_indices;
+  d3_word *node_indices = d3plot_part_get_node_indices2(
+      plot_file, part, &num_part_node_indices, solid_ids, num_solids, beam_ids,
+      num_beams, shell_ids, num_shells, thick_shell_ids, num_thick_shells,
+      solid_cons, beam_cons, shell_cons, thick_shell_cons);
+  free(node_indices);
+
+  END_PROFILE_FUNC();
+  return num_part_node_indices;
+}
+
+size_t d3plot_part_get_num_elements(const d3plot_part *part) {
+  return part->num_solids + part->num_thick_shells + part->num_beams +
+         part->num_shells;
+}
+
+d3_word *d3plot_part_get_all_element_ids(const d3plot_part *part,
+                                         size_t *num_ids) {
+  BEGIN_PROFILE_FUNC();
+
+  *num_ids = d3plot_part_get_num_elements(part);
+
+  d3_word *all_ids = malloc(*num_ids * sizeof(d3_word));
+
+  int empty = 1;
+  size_t all_ids_size = 0;
+
+  if (part->num_solids != 0) {
+    memcpy(all_ids, part->solid_ids, part->num_solids * sizeof(d3_word));
+    empty = 0;
+    all_ids_size += part->num_solids;
+  }
+
+  if (part->num_thick_shells != 0) {
+    if (empty) {
+      memcpy(all_ids, part->thick_shell_ids,
+             part->num_thick_shells * sizeof(d3_word));
+    } else {
+      _insert_sorted(all_ids, all_ids_size, part->thick_shell_ids,
+                     part->num_thick_shells);
+    }
+    empty = 0;
+    all_ids_size += part->num_thick_shells;
+  }
+
+  if (part->num_beams != 0) {
+    if (empty) {
+      memcpy(all_ids, part->beam_ids, part->num_beams * sizeof(d3_word));
+    } else {
+      _insert_sorted(all_ids, all_ids_size, part->beam_ids, part->num_beams);
+    }
+    empty = 0;
+    all_ids_size += part->num_beams;
+  }
+
+  if (part->num_shells != 0) {
+    if (empty) {
+      memcpy(all_ids, part->shell_ids, part->num_shells * sizeof(d3_word));
+    } else {
+      _insert_sorted(all_ids, all_ids_size, part->shell_ids, part->num_shells);
+    }
+    empty = 0;
+    all_ids_size += part->num_shells;
+  }
+
+  END_PROFILE_FUNC();
+  return all_ids;
 }

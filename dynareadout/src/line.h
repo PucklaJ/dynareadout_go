@@ -23,52 +23,48 @@
  * 3. This notice may not be removed or altered from any source distribution.
  ************************************************************************************/
 
-#ifndef PATH_H
-#define PATH_H
-#include <stdint.h>
-#include <stdlib.h>
+#ifndef LINE_H
+#define LINE_H
 
-/* TODO: Make sure to use the correct PATH_SEP on windows when working with the
- * real file system*/
-#define PATH_SEP '/'
+#include "extra_string.h"
+#include <stdio.h>
+
 #ifdef _WIN32
-#define REAL_PATH_SEP '\\'
+/* Windows has a max stack size of 1MB*/
+#define LINE_READER_BUFFER_SIZE (1024 * 10) /* 10KB */
 #else
-#define REAL_PATH_SEP '/'
+#define LINE_READER_BUFFER_SIZE (1024 * 1024) /* 1MB */
 #endif
 
-#define PATH_IS_ABS(str) (str[0] == PATH_SEP)
+/* All the state for the read_line function*/
+typedef struct {
+  FILE *file;
+  extra_string line; /* This stores the read line after a read_line call*/
+  size_t
+      line_length; /* The length of the line when considering inline comments*/
+  size_t comment_index; /* An index into line to where a comment can be found.
+                           Is ~0 if no comment has been found*/
+
+  /* Internal variables used in read_line*/
+  char
+      buffer[LINE_READER_BUFFER_SIZE]; /* The file is read in
+                                          LINE_READER_BUFFER_SIZE sized chunks*/
+  size_t buffer_index;
+  size_t bytes_read;
+  size_t extra_capacity;
+} line_reader_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define path_move_up(path) _path_move_up(path, PATH_SEP)
-#define path_move_up_real(path) _path_move_up(path, REAL_PATH_SEP)
+/* Initialise all variables of the line reader*/
+line_reader_t new_line_reader(FILE *file);
 
-/* Returns the index at which the new path string would end (index of PATH_SEP)
- * when moving up one folder. If no parent folder exists, then ~0 is returned.*/
-size_t _path_move_up(const char *path, char path_sep);
-
-/* Join two paths together by inserting a PATH_SEP. Needs to be deallocated by
- * free*/
-char *path_join(const char *lhs, const char *rhs);
-
-/* Returns wether the given path exists and is a file*/
-int path_is_file(const char *path_name);
-
-/* Returns wether the given path exists and is a directory*/
-int path_is_directory(const char *path_name);
-
-/* Returns the current working directory. Needs to be deallocated by free.*/
-char *path_working_directory();
-
-/* Returns wether a path is absolute*/
-int path_is_abs(const char *path_name);
-
-/* Returns the size of the file given by path_name in bytes. If the retrieval
- * fails it returns 0.*/
-uint64_t path_get_file_size(const char *path_name);
+/* Reads from file until it encounters the next new line and stores the
+ * resulting string in line. Also supports carriage return. Returns 0 if the
+ * file has been completely parsed and non 0 if the line can be processed*/
+int read_line(line_reader_t *lr);
 
 #ifdef __cplusplus
 }

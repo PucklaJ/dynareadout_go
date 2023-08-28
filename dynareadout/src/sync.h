@@ -23,52 +23,40 @@
  * 3. This notice may not be removed or altered from any source distribution.
  ************************************************************************************/
 
-#ifndef PATH_H
-#define PATH_H
-#include <stdint.h>
-#include <stdlib.h>
+#ifndef SYNC_H
+#define SYNC_H
 
-/* TODO: Make sure to use the correct PATH_SEP on windows when working with the
- * real file system*/
-#define PATH_SEP '/'
 #ifdef _WIN32
-#define REAL_PATH_SEP '\\'
-#else
-#define REAL_PATH_SEP '/'
-#endif
+#include <windows.h>
 
-#define PATH_IS_ABS(str) (str[0] == PATH_SEP)
+typedef HANDLE sync_t;
+#else
+#include <pthread.h>
+
+typedef pthread_mutex_t sync_t;
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define path_move_up(path) _path_move_up(path, PATH_SEP)
-#define path_move_up_real(path) _path_move_up(path, REAL_PATH_SEP)
+/* Creates a synchronisation object (Usually called mutex). Needs to be
+ * destroyed by sync_destroy*/
+sync_t sync_create();
 
-/* Returns the index at which the new path string would end (index of PATH_SEP)
- * when moving up one folder. If no parent folder exists, then ~0 is returned.*/
-size_t _path_move_up(const char *path, char path_sep);
+/* Blocks until the mutex is unlocked and locks it. Return 0 on success.*/
+int sync_lock(sync_t *snc);
 
-/* Join two paths together by inserting a PATH_SEP. Needs to be deallocated by
- * free*/
-char *path_join(const char *lhs, const char *rhs);
+/* Locks the mutex and returns 0 if it is unlocked. If the mutex is currently
+ * locked it returns EBUSY and does not block otherwise it returns the error
+ * code.*/
+int sync_trylock(sync_t *snc);
 
-/* Returns wether the given path exists and is a file*/
-int path_is_file(const char *path_name);
+/* Unlocks the mutex if it is currently locked and returns 0 on success*/
+int sync_unlock(sync_t *snc);
 
-/* Returns wether the given path exists and is a directory*/
-int path_is_directory(const char *path_name);
-
-/* Returns the current working directory. Needs to be deallocated by free.*/
-char *path_working_directory();
-
-/* Returns wether a path is absolute*/
-int path_is_abs(const char *path_name);
-
-/* Returns the size of the file given by path_name in bytes. If the retrieval
- * fails it returns 0.*/
-uint64_t path_get_file_size(const char *path_name);
+/* Destroy the mutex*/
+void sync_destroy(sync_t *snc);
 
 #ifdef __cplusplus
 }

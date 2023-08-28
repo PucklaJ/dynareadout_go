@@ -25,6 +25,7 @@
 
 #ifndef D3_DEFINES_H
 #define D3_DEFINES_H
+#include <stddef.h>
 #include <stdint.h>
 #ifdef __cplusplus
 #include <array>
@@ -39,6 +40,8 @@ typedef struct {
 #else
   d3_word node_indices[8];
 #endif
+  /* Index into the parts (this those indeed refer to parts even though the
+   * documentation does not say so)*/
   d3_word material_index;
 } d3plot_solid_con;
 
@@ -53,6 +56,8 @@ typedef struct {
 #endif
   d3_word orientation_node_index;
   d3_word _null[2];
+  /* Index into the parts (this those indeed refer to parts even though the
+   * documentation does not say so)*/
   d3_word material_index;
 } d3plot_beam_con;
 
@@ -63,6 +68,8 @@ typedef struct {
 #else
   d3_word node_indices[4];
 #endif
+  /* Index into the parts (this those indeed refer to parts even though the
+   * documentation does not say so)*/
   d3_word material_index;
 } d3plot_shell_con;
 
@@ -71,6 +78,11 @@ typedef struct {
   d3_word *thick_shell_ids;
   d3_word *beam_ids;
   d3_word *shell_ids;
+
+  size_t *solid_indices;
+  size_t *thick_shell_indices;
+  size_t *beam_indices;
+  size_t *shell_indices;
 
   size_t num_solids;
   size_t num_thick_shells;
@@ -97,6 +109,17 @@ typedef struct {
 } d3plot_tensor;
 
 typedef struct {
+  double x;
+  double y;
+} d3plot_x_y;
+
+typedef struct {
+  double x;
+  double y;
+  double xy;
+} d3plot_x_y_xy;
+
+typedef struct {
   union {
     d3plot_tensor sigma;
     d3plot_tensor stress;
@@ -105,8 +128,6 @@ typedef struct {
     double effective_plastic_strain;
     double material_dependent_value;
   };
-  double extra1;
-  double extra2;
   union {
     d3plot_tensor epsilon;
     d3plot_tensor strain;
@@ -123,6 +144,10 @@ typedef struct {
     double effective_plastic_strain;
     double material_dependent_value;
   };
+
+  /* All history variables of all elements are allocated in one big array and
+   * this is a pointer somewhere into said array*/
+  double *history_variables;
 } d3plot_surface;
 
 typedef struct {
@@ -160,6 +185,16 @@ typedef struct {
     d3plot_tensor outer_epsilon;
     d3plot_tensor outer_strain;
   };
+
+  d3plot_x_y_xy bending_moment;
+  d3plot_x_y shear_resultant;
+  d3plot_x_y_xy normal_resultant;
+  double thickness;
+#ifdef __cplusplus
+  std::array<double, 2> element_dependent_variables;
+#else
+  double element_dependent_variables[2];
+#endif
   double internal_energy;
 } d3plot_shell;
 
