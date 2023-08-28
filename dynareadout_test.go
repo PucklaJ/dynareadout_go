@@ -16,15 +16,18 @@ func TestBinout(t *testing.T) {
 	defer binFile.Close()
 
 	children := binFile.GetChildren("/")
-	if !assert.Len(t, children, 2) {
+	if !assert.Len(t, children, 5) {
 		return
 	}
 
-	assert.Equal(t, children[0], "nodout")
-	assert.Equal(t, children[1], "rcforc")
+	assert.Equal(t, "bndout", children[0])
+	assert.Equal(t, "glstat", children[1])
+	assert.Equal(t, "nodout", children[2])
+	assert.Equal(t, "rcforc", children[3])
+	assert.Equal(t, "sleout", children[4])
 
 	children = binFile.GetChildren("/nodout")
-	if !assert.Len(t, children, 602) {
+	if !assert.Len(t, children, 14999) {
 		return
 	}
 
@@ -35,7 +38,7 @@ func TestBinout(t *testing.T) {
 
 	timesteps, err := binFile.GetNumTimesteps("/nodout")
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(601), timesteps)
+	assert.Equal(t, uint64(14998), timesteps)
 	_, err = binFile.GetNumTimesteps("/nodout/schinken")
 	assert.NotNil(t, err)
 
@@ -65,7 +68,7 @@ func TestBinout(t *testing.T) {
 	}
 
 	assert.Len(t, legend, 80)
-	assert.Equal(t, "History_node_1                                                                  ", legend)
+	assert.Equal(t, "                                                                                ", legend)
 
 	if !assert.True(t, binFile.VariableExists("/nodout/metadata/ids")) {
 		return
@@ -93,7 +96,7 @@ func TestBinout(t *testing.T) {
 	}
 	assert.Len(t, title, 80)
 
-	assert.Equal(t, "Pouch_macro_37Ah                                                                ", title)
+	assert.Equal(t, "LS-DYNA keyword deck by LS-PrePost                                              ", title)
 
 	realPath, typeID, timed, err := binFile.SimplePathToReal("nodout/x_displacement")
 	assert.Nil(t, err)
@@ -103,7 +106,7 @@ func TestBinout(t *testing.T) {
 
 	yDisp, err := binFile.ReadTimedFloat32("/nodout/y_displacement")
 	assert.Nil(t, err)
-	assert.Len(t, yDisp, 601)
+	assert.Len(t, yDisp, 14998)
 	assert.Len(t, yDisp[0], 1)
 }
 
@@ -179,7 +182,8 @@ func TestD3plot(t *testing.T) {
 }
 
 func TestKeyFile(t *testing.T) {
-	keywords, err := KeyFileParse("test_data/key_file.k", true)
+	keywords, warn, err := KeyFileParse("test_data/key_file.k", DefaultKeyFileParseConfig())
+	assert.Nil(t, warn)
 	if !assert.Nil(t, err) {
 		return
 	}
@@ -277,14 +281,16 @@ func TestKeyFile(t *testing.T) {
 }
 
 func TestKeyFileParseWithCallback(t *testing.T) {
-	err := KeyFileParseWithCallback("test_data/key_file.k",
-		func(keywordName string, card *Card, cardIndex int) {
+	warn, err := KeyFileParseWithCallback("test_data/key_file.k",
+		func(fileName string, lineNumber int, keywordName string, card *Card, cardIndex int) {
+			var cardString string
 			if card != nil {
-				fmt.Println("Keyword:", keywordName, "CardIndex:", cardIndex, "Card:", card.ParseWholeNoTrim())
-			} else {
-				fmt.Println("Keyword:", keywordName, "CardIndex:", cardIndex)
+				cardString = fmt.Sprint("Card: ", card.ParseWholeNoTrim(), " CardIndex: ", cardIndex)
 			}
-		}, true)
+
+			fmt.Println("Filename:", fileName, "Line:", lineNumber, "Keyword:", keywordName, cardString)
+		}, DefaultKeyFileParseConfig())
+	assert.Nil(t, warn)
 	if !assert.Nil(t, err) {
 		return
 	}

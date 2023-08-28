@@ -294,8 +294,8 @@ func (plotFile D3plot) ReadSolidsState(state uint64) ([]C.d3plot_solid, error) {
 }
 
 func (plotFile D3plot) ReadThickShellsState(state uint64) ([]C.d3plot_thick_shell, error) {
-	var numThickShells C.size_t
-	dataC := C.d3plot_read_thick_shells_state(&plotFile.handle, C.size_t(state), &numThickShells)
+	var numThickShells, numHistoryVariables C.size_t
+	dataC := C.d3plot_read_thick_shells_state(&plotFile.handle, C.size_t(state), &numThickShells, &numHistoryVariables)
 
 	if plotFile.handle.error_string != nil {
 		err := errors.New(C.GoString(plotFile.handle.error_string))
@@ -338,8 +338,8 @@ func (plotFile D3plot) ReadBeamsState(state uint64) ([]C.d3plot_beam, error) {
 }
 
 func (plotFile D3plot) ReadShellsState(state uint64) ([]C.d3plot_shell, error) {
-	var numShells C.size_t
-	dataC := C.d3plot_read_shells_state(&plotFile.handle, C.size_t(state), &numShells)
+	var numShells, numHistoryVariables C.size_t
+	dataC := C.d3plot_read_shells_state(&plotFile.handle, C.size_t(state), &numShells, &numHistoryVariables)
 
 	if plotFile.handle.error_string != nil {
 		err := errors.New(C.GoString(plotFile.handle.error_string))

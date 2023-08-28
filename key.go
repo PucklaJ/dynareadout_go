@@ -37,32 +37,65 @@ type Card struct {
 	handle *C.card_t
 }
 
-type KeyFileParseCallback func(string, *Card, int)
+type KeyFileParseCallback func(string, int, string, *Card, int)
 
-func KeyFileParse(fileName string, parseIncludes bool) (Keywords, error) {
+type KeyFileParseConfig struct {
+	ParseIncludes          bool
+	IgnoreNotFoundIncludes bool
+}
+
+type KeyFileWarning struct {
+	warningString string
+}
+
+func (w *KeyFileWarning) Error() string {
+	return w.warningString
+}
+
+func DefaultKeyFileParseConfig() KeyFileParseConfig {
+	return KeyFileParseConfig{
+		ParseIncludes:          true,
+		IgnoreNotFoundIncludes: false,
+	}
+}
+
+func KeyFileParse(fileName string, parseConfig KeyFileParseConfig) (Keywords, *KeyFileWarning, error) {
 	var keywords Keywords
+	var warning *KeyFileWarning
 	var errorString *C.char
-	var parseIncludesC C.int
+	var warningString *C.char
+	var cParseConfig C.key_parse_config_t
 
-	if parseIncludes {
-		parseIncludesC = 1
+	if parseConfig.ParseIncludes {
+		cParseConfig.parse_includes = 1
 	} else {
-		parseIncludesC = 0
+		cParseConfig.parse_includes = 0
+	}
+	if parseConfig.IgnoreNotFoundIncludes {
+		cParseConfig.ignore_not_found_includes = 1
+	} else {
+		cParseConfig.ignore_not_found_includes = 0
 	}
 
 	fileNameC := C.CString(fileName)
 
-	keywords.handle = C.key_file_parse(fileNameC, &keywords.numKeywords, parseIncludesC, &errorString)
+	keywords.handle = C.key_file_parse(fileNameC, &keywords.numKeywords, &cParseConfig, &errorString, &warningString)
 	C.free(unsafe.Pointer(fileNameC))
+
+	if warningString != nil {
+		warning = new(KeyFileWarning)
+		warning.warningString = C.GoString(warningString)
+		C.free(unsafe.Pointer(warningString))
+	}
 
 	if errorString != nil {
 		err := errors.New(C.GoString(errorString))
 		C.free(unsafe.Pointer(errorString))
 
-		return keywords, err
+		return keywords, warning, err
 	}
 
-	return keywords, nil
+	return keywords, warning, nil
 }
 
 func (k *Keywords) Free() {
@@ -277,39 +310,57 @@ func (c Card) ParseGetTypeWidth(valueWidth int) int {
 	return int(C.card_parse_get_type_width(c.handle, C.uint8_t(valueWidth)))
 }
 
-func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, parseIncludes bool) error {
+func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, parseConfig KeyFileParseConfig) (*KeyFileWarning, error) {
 	fileNameC := C.CString(fileName)
-	var parseIncludesC C.int
+	var cParseConfig C.key_parse_config_t
 	var errorString *C.char
+	var warningString *C.char
+	var warning *KeyFileWarning
 
-	if parseIncludes {
-		parseIncludesC = 1
+	if parseConfig.ParseIncludes {
+		cParseConfig.parse_includes = 1
 	} else {
-		parseIncludesC = 0
+		cParseConfig.parse_includes = 0
+	}
+	if parseConfig.IgnoreNotFoundIncludes {
+		cParseConfig.ignore_not_found_includes = 1
+	} else {
+		cParseConfig.ignore_not_found_includes = 0
 	}
 
 	C.key_file_parse_with_callback(fileNameC,
 		C.key_file_callback(C.keyFileParseGoCallback),
-		parseIncludesC,
+		&cParseConfig,
 		&errorString,
+		&warningString,
 		unsafe.Pointer(&callback),
 		nil,
-		nil)
+		nil,
+		nil,
+	)
 	C.free(unsafe.Pointer(fileNameC))
+
+	if warningString != nil {
+		warning = new(KeyFileWarning)
+		warning.warningString = C.GoString(warningString)
+		C.free(unsafe.Pointer(warningString))
+	}
 
 	if errorString != nil {
 		errStr := C.GoString(errorString)
 		C.free(unsafe.Pointer(errorString))
-		return errors.New(errStr)
+		return warning, errors.New(errStr)
 	}
 
-	return nil
+	return warning, nil
 }
 
 //export keyFileParseGoCallback
-func keyFileParseGoCallback(keywordNameC *C.char, cardC *C.card_t, cardIndexC C.size_t, userData unsafe.Pointer) {
+func keyFileParseGoCallback(fileNameC *C.char, lineNumberC C.size_t, keywordNameC *C.char, cardC *C.card_t, cardIndexC C.size_t, userData unsafe.Pointer) {
 	callback := *(*KeyFileParseCallback)(userData)
 
+	fileName := C.GoString(fileNameC)
+	lineNumber := int(lineNumberC)
 	keywordName := C.GoString(keywordNameC)
 	var card *Card
 	if cardC != nil {
@@ -323,5 +374,5 @@ func keyFileParseGoCallback(keywordNameC *C.char, cardC *C.card_t, cardIndexC C.
 		cardIndex = int(cardIndexC)
 	}
 
-	callback(keywordName, card, cardIndex)
+	callback(fileName, lineNumber, keywordName, card, cardIndex)
 }
