@@ -1,6 +1,7 @@
 package dynareadout
 
 /*
+#cgo CFLAGS: -DTHREAD_SAFE
 #include <errno.h>
 #include <stdlib.h>
 #include "dynareadout/src/key.h"

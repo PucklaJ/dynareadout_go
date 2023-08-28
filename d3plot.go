@@ -1,6 +1,7 @@
 package dynareadout
 
 /*
+#cgo CFLAGS: -DTHREAD_SAFE
 #include <stdlib.h>
 #include "dynareadout/src/d3plot.h"
 */

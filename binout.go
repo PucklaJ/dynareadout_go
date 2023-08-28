@@ -1,6 +1,7 @@
 package dynareadout
 
 /*
+#cgo CFLAGS: -DTHREAD_SAFE
 #include "dynareadout/src/binout.h"
 */
 import "C"
