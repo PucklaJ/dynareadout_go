@@ -34,6 +34,7 @@ line_reader_t new_line_reader(FILE *file) {
   BEGIN_PROFILE_FUNC();
 
   line_reader_t lr;
+  lr.buffer = malloc(LINE_READER_BUFFER_SIZE);
   lr.file = file;
   lr.line.extra = NULL;
   lr.bytes_read = 0;
@@ -92,8 +93,7 @@ int read_line(line_reader_t *lr) {
       /* Switch to extra if too much characters have been read and make sure
        * that enough memory is allocated*/
       if (lr->line_length >= EXTRA_STRING_BUFFER_SIZE &&
-          (lr->extra_capacity == 0 ||
-           lr->line_length - EXTRA_STRING_BUFFER_SIZE > lr->extra_capacity)) {
+          lr->line_length + 1 - EXTRA_STRING_BUFFER_SIZE > lr->extra_capacity) {
         lr->extra_capacity += EXTRA_STRING_BUFFER_SIZE;
         lr->line.extra = realloc(lr->line.extra, lr->extra_capacity);
         cursor = &lr->line.extra[lr->line_length - EXTRA_STRING_BUFFER_SIZE];
@@ -113,4 +113,12 @@ int read_line(line_reader_t *lr) {
 
   END_PROFILE_FUNC();
   return 1;
+}
+
+void free_line_reader(line_reader_t lr) {
+  BEGIN_PROFILE_FUNC();
+
+  free(lr.buffer);
+
+  END_PROFILE_FUNC();
 }

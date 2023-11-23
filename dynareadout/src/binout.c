@@ -29,8 +29,10 @@
 #include "binout_glob.h"
 #include "path.h"
 #include "profiling.h"
+#include "string_builder.h"
 #include <assert.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define FILE_FAILED(message)                                                   \
@@ -81,7 +83,7 @@ binout_file binout_open(const char *file_name) {
   while (cur_file_index < bin_file.num_files) {
     bin_file.files[cur_file_index] =
         multi_file_open(file_names[cur_file_index]);
-#ifndef THREAD_SAFE
+#ifdef NO_THREAD_SAFETY
     if (!bin_file.files[cur_file_index]) {
       _binout_add_file_error(&bin_file, file_names[cur_file_index],
                              strerror(errno));
@@ -97,7 +99,7 @@ binout_file binout_open(const char *file_name) {
     multi_file_index_t file_index = multi_file_access(file);
 
     /* Just ignore the file if it failed to open*/
-#ifdef THREAD_SAFE
+#ifndef NO_THREAD_SAFETY
     if (file_index.index == ULONG_MAX) {
       FILE_FAILED(strerror(errno));
     }
@@ -181,7 +183,7 @@ binout_file binout_open(const char *file_name) {
         BIN_FILE_READ(path_buffer, 1, record_data_length,
                       "Failed to read PATH of CD record");
 
-        if (PATH_IS_ABS(path_buffer)) {
+        if PATH_IS_ABS (path_buffer) {
           memcpy(current_path_string, path_buffer, record_data_length + 1);
           current_path = path_view_new(current_path_string);
           /* Only insert the current folder if the current path is not the
@@ -291,7 +293,7 @@ binout_file binout_open(const char *file_name) {
   /* Clean up failed files*/
   cur_file_index = 0;
   while (cur_file_index < bin_file.num_files) {
-#ifdef THREAD_SAFE
+#ifndef NO_THREAD_SAFETY
     if (bin_file.files[cur_file_index].file_handles == NULL) {
 #else
     if (!bin_file.files[cur_file_index]) {
@@ -424,24 +426,20 @@ void binout_free_children(char **children) {
 char *binout_open_error(binout_file *bin_file) {
   BEGIN_PROFILE_FUNC();
 
-  char *file_error = NULL;
-  size_t file_error_size = 0;
+  string_builder_t file_error = string_builder_new();
 
   size_t i = 0;
   while (i < bin_file->num_file_errors) {
-    const size_t file_error_length = strlen(bin_file->file_errors[i]);
-    file_error_size += file_error_length + 1;
-    file_error = realloc(file_error, file_error_size);
-    memcpy(file_error, bin_file->file_errors[bin_file->num_file_errors - 1],
-           file_error_length);
-    file_error[file_error_size - 1] =
-        '\n' * (i != bin_file->num_file_errors - 1);
+    string_builder_append(&file_error, bin_file->file_errors[i]);
+    if (i != bin_file->num_file_errors - 1) {
+      string_builder_append_char(&file_error, '\n');
+    }
 
     i++;
   }
 
   END_PROFILE_FUNC();
-  return file_error;
+  return string_builder_move(&file_error);
 }
 
 size_t binout_get_num_timesteps(const binout_file *bin_file, const char *path) {
@@ -481,8 +479,7 @@ size_t binout_get_num_timesteps(const binout_file *bin_file, const char *path) {
   /* Loop until the last dxxxxxx string has been found. It's probably the
    * penultimate one, after "metadata"*/
   size_t end_index = num_children - 1;
-  while (end_index > start_index &&
-         !_binout_is_d_string(folders[end_index].name)) {
+  while (!_binout_is_d_string(folders[end_index].name)) {
     end_index--;
   }
 
@@ -494,271 +491,190 @@ char *binout_simple_path_to_real(const binout_file *bin_file,
                                  const char *simple, uint8_t *type_id,
                                  int *timed) {
   BEGIN_PROFILE_FUNC();
-  *timed = 0;
+
   *type_id = BINOUT_TYPE_INVALID;
+  *timed = 0;
 
-  path_view_t pv = path_view_new(simple);
-  /* If the simple path starts with the root folder or not*/
-  if (PATH_VIEW_LEN((&pv)) == 1 && pv.string[pv.start] == PATH_SEP) {
-    if (!path_view_advance(&pv)) {
-      char *real_path = path_view_stralloc(&pv);
+  path_view_t simple_path = path_view_new(simple);
+  /* The current folder in this recursive operation*/
+  binout_folder_t *folder;
+  size_t search_index;
+  string_builder_t real_path = string_builder_new();
+  string_builder_append_char(&real_path, PATH_SEP);
 
+  /* If the simple path starts with PATH_SEP advance*/
+  if (PATH_IS_ABS(simple)) {
+    /* The simple path is just the root folder*/
+    if (!path_view_advance(&simple_path)) {
       END_PROFILE_FUNC();
-      return real_path;
+      return string_builder_move(&real_path);
     }
   }
 
   if (bin_file->directory.num_children == 0) {
+    string_builder_free(&real_path);
     END_PROFILE_FUNC();
     return NULL;
   }
 
-  size_t folder_index = binout_directory_binary_search_folder(
+  search_index = binout_directory_binary_search_folder(
       bin_file->directory.children, 0, bin_file->directory.num_children - 1,
-      &pv);
-
-  if (folder_index == (size_t)~0) {
+      &simple_path);
+  if (search_index == (size_t)~0) {
+    string_builder_free(&real_path);
     END_PROFILE_FUNC();
     return NULL;
   }
 
-  /* The path consists of just the root folder and folder inside it*/
-  if (!path_view_advance(&pv)) {
-    char *real_path = malloc(1 + PATH_VIEW_LEN((&pv)) + 1);
-    real_path[0] = PATH_SEP;
-    memcpy(&real_path[1], &pv.string[pv.start], PATH_VIEW_LEN((&pv)));
-    real_path[1 + PATH_VIEW_LEN((&pv))] = '\0';
+  folder = &bin_file->directory.children[search_index];
 
-    END_PROFILE_FUNC();
-    return real_path;
-  }
+  string_builder_append(&real_path, folder->name);
 
-  const binout_folder_t *folder = &bin_file->directory.children[folder_index];
-  if (folder->num_children == 0) {
-    END_PROFILE_FUNC();
-    return NULL;
-  }
-
-  /* This means that the simple path is not really simple*/
-  if (path_view_strcmp(&pv, "metadata") == 0 ||
-      _binout_path_view_is_d_string(&pv)) {
-    /* Construct the real path by advancing through the path elements*/
-    /* First start with the root folder, the name of 'folder' and the name of
-     * the current folder of pv*/
-    const size_t folder_name_len = strlen(folder->name);
-    size_t real_path_len = 1 + folder_name_len + 1 + PATH_VIEW_LEN((&pv));
-    /* Allocate one byte more for '\0'*/
-    char *real_path = malloc(real_path_len + 1);
-    real_path[0] = PATH_SEP;
-    memcpy(&real_path[1], folder->name, folder_name_len);
-    real_path[1 + folder_name_len] = PATH_SEP;
-    memcpy(&real_path[1 + folder_name_len + 1], &pv.string[pv.start],
-           PATH_VIEW_LEN((&pv)));
-
-    /* Also iterate over the folders and files to get the type id*/
-    void *children = folder->children;
-    size_t num_children = folder->num_children;
-    if (((const binout_folder_or_file_t *)children)->type == BINOUT_FOLDER) {
-      folder_index = binout_directory_binary_search_folder(
-          (const binout_folder_t *)children, 0, num_children - 1, &pv);
-      if (folder_index != (size_t)~0) {
-        num_children =
-            ((const binout_folder_t *)children)[folder_index].num_children;
-        children = ((const binout_folder_t *)children)[folder_index].children;
-      } else {
-        /* The given path does not exist*/
-        free(real_path);
-        END_PROFILE_FUNC();
-        return NULL;
-      }
-    } else {
-      folder_index = binout_directory_binary_search_file(
-          (const binout_file_t *)children, 0, num_children - 1, &pv);
-      if (folder_index != (size_t)~0) {
-        *type_id = ((const binout_file_t *)children)[folder_index].var_type;
-        children = NULL;
-        num_children = 0;
-      } else {
-        /* The given path does not exist*/
-        free(real_path);
-        END_PROFILE_FUNC();
-        return NULL;
-      }
+  /* Advance until we are done*/
+  while (path_view_advance(&simple_path)) {
+    if (folder->num_children == 0) {
+      string_builder_free(&real_path);
+      END_PROFILE_FUNC();
+      return NULL;
     }
 
-    while (path_view_advance(&pv)) {
-      /* Iterate over the folders and files to get the type id*/
-      if (num_children != 0 && children) {
-        if (((const binout_folder_or_file_t *)children)->type ==
-            BINOUT_FOLDER) {
-          folder_index = binout_directory_binary_search_folder(
-              (const binout_folder_t *)children, 0, num_children - 1, &pv);
-          if (folder_index != (size_t)~0) {
-            num_children =
-                ((const binout_folder_t *)children)[folder_index].num_children;
-            children =
-                ((const binout_folder_t *)children)[folder_index].children;
-          } else {
-            /* The given path does not exist*/
-            free(real_path);
-            END_PROFILE_FUNC();
-            return NULL;
-          }
-        } else {
-          folder_index = binout_directory_binary_search_file(
-              (const binout_file_t *)children, 0, num_children - 1, &pv);
-          if (folder_index != (size_t)~0) {
-            *type_id = ((const binout_file_t *)children)[folder_index].var_type;
-            children = NULL;
-            num_children = 0;
-          } else {
-            /* The given path does not exist*/
-            free(real_path);
-            END_PROFILE_FUNC();
-            return NULL;
-          }
+    switch (BINOUT_FOLDER_CHILDREN_GET_TYPE(folder)) {
+    case BINOUT_FILE: {
+      search_index = binout_directory_binary_search_file(
+          folder->children, 0, folder->num_children - 1, &simple_path);
+      if (search_index == (size_t)~0) {
+        string_builder_free(&real_path);
+        END_PROFILE_FUNC();
+        return NULL;
+      }
+
+      /* Make sure that the simple path is also done*/
+      if (path_view_advance(&simple_path)) {
+        string_builder_free(&real_path);
+        END_PROFILE_FUNC();
+        return NULL;
+      }
+
+      binout_file_t *file = &((binout_file_t *)folder->children)[search_index];
+      *type_id = file->var_type;
+
+      string_builder_append_char(&real_path, PATH_SEP);
+      string_builder_append(&real_path, file->name);
+
+      char *rv = string_builder_move(&real_path);
+      END_PROFILE_FUNC();
+      return rv;
+    } break;
+    case BINOUT_FOLDER: {
+      search_index = binout_directory_binary_search_folder(
+          folder->children, 0, folder->num_children - 1, &simple_path);
+
+      /* If the simple folder can be found directly advance to the next folder*/
+      if (search_index != (size_t)~0) {
+        folder = &((binout_folder_t *)folder->children)[search_index];
+
+        string_builder_append_char(&real_path, PATH_SEP);
+        string_builder_append(&real_path, folder->name);
+        break;
+      }
+
+      /* If a metadata folder exists beneath the current folder search it for
+       * the simple path*/
+      binout_folder_t *metadata = NULL;
+      /* The metadata folder should be the last one*/
+      size_t i = folder->num_children - 1;
+      while (1) {
+        metadata = &((binout_folder_t *)folder->children)[i];
+        if (_binout_is_metadata_string(metadata->name)) {
+          break;
         }
-      } else {
-        /* The given path does not exist*/
-        free(real_path);
-        END_PROFILE_FUNC();
-        return NULL;
+        metadata = NULL;
+
+        if (i == 0) {
+          break;
+        }
+        i--;
       }
 
-      real_path_len += 1 + PATH_VIEW_LEN((&pv));
-      /* Allocate one byte more for '\0'*/
-      real_path = realloc(real_path, real_path_len + 1);
-      real_path[real_path_len - 1 - PATH_VIEW_LEN((&pv))] = PATH_SEP;
-      memcpy(&real_path[real_path_len - PATH_VIEW_LEN((&pv))],
-             &pv.string[pv.start], PATH_VIEW_LEN((&pv)));
-    }
-    real_path[real_path_len] = '\0';
+      if (metadata && metadata->num_children != 0 &&
+          BINOUT_FOLDER_CHILDREN_GET_TYPE(metadata) == BINOUT_FILE) {
+        search_index = binout_directory_binary_search_file(
+            metadata->children, 0, metadata->num_children - 1, &simple_path);
+        if (search_index != (size_t)~0) {
+          /* We should be done*/
+          if (path_view_advance(&simple_path)) {
+            string_builder_free(&real_path);
+            END_PROFILE_FUNC();
+            return NULL;
+          }
 
-    END_PROFILE_FUNC();
-    return real_path;
-  }
+          binout_file_t *file =
+              &((binout_file_t *)metadata->children)[search_index];
 
-  if (path_view_advance(&pv)) {
-    /* This path is invalid*/
-    END_PROFILE_FUNC();
-    return NULL;
-  }
+          string_builder_append_char(&real_path, PATH_SEP);
+          string_builder_append(&real_path, "metadata");
+          string_builder_append_char(&real_path, PATH_SEP);
+          string_builder_append(&real_path, file->name);
 
-  if (BINOUT_FOLDER_CHILDREN_GET_TYPE(folder) != BINOUT_FOLDER) {
-    char *real_path = malloc((simple[0] != PATH_SEP) + strlen(simple) + 1);
-    real_path[0] = PATH_SEP;
-    memcpy(&real_path[1], &simple[simple[0] == PATH_SEP], strlen(simple) + 1);
+          *type_id = file->var_type;
 
-    /* Search for the file to get the type id*/
-    const size_t file_index = binout_directory_binary_search_file(
-        (const binout_file_t *)folder->children, 0, folder->num_children - 1,
-        &pv);
-    if (file_index != (size_t)~0) {
-      *type_id = ((const binout_file_t *)folder->children)[file_index].var_type;
-    }
+          char *rv = string_builder_move(&real_path);
+          END_PROFILE_FUNC();
+          return rv;
+        }
+      }
 
-    END_PROFILE_FUNC();
-    return real_path;
-  }
+      /* If timed data exists in the folder search it for the simple path*/
+      binout_folder_t *d_folder = NULL;
+      /* The d folder of the first time step should be the first one*/
+      i = 0;
+      while (i < folder->num_children) {
+        d_folder = &((binout_folder_t *)folder->children)[i];
+        if (_binout_is_d_string(d_folder->name)) {
+          break;
+        }
+        d_folder = NULL;
 
-  /* Search for the first d string folder (it should be the first)*/
-  size_t i = 0;
-  const binout_folder_t *sub_folder = NULL;
-  while (i < folder->num_children) {
-    const binout_folder_t *search_folder =
-        &((const binout_folder_t *)folder->children)[i];
-    if (_binout_is_d_string(search_folder->name)) {
-      sub_folder = search_folder;
-      break;
-    }
+        i++;
+      }
 
-    i++;
-  }
+      if (d_folder && d_folder->num_children != 0 &&
+          BINOUT_FOLDER_CHILDREN_GET_TYPE(d_folder) == BINOUT_FILE) {
+        search_index = binout_directory_binary_search_file(
+            d_folder->children, 0, d_folder->num_children - 1, &simple_path);
+        if (search_index != (size_t)~0) {
+          /* We should be done*/
+          if (path_view_advance(&simple_path)) {
+            string_builder_free(&real_path);
+            END_PROFILE_FUNC();
+            return NULL;
+          }
 
-  /* If the sub folder does not contain files for some reason ignore it*/
-  if (sub_folder &&
-      BINOUT_FOLDER_CHILDREN_GET_TYPE(sub_folder) == BINOUT_FILE &&
-      sub_folder->num_children != 0) {
-    /* Then check if the requested file is contained in said folder*/
-    const size_t file_index = binout_directory_binary_search_file(
-        (const binout_file_t *)sub_folder->children, 0,
-        sub_folder->num_children - 1, &pv);
+          binout_file_t *file =
+              &((binout_file_t *)d_folder->children)[search_index];
 
-    if (file_index != (size_t)~0) {
-      *timed = 1;
-      const binout_file_t *file =
-          &((const binout_file_t *)sub_folder->children)[file_index];
-      *type_id = file->var_type;
+          string_builder_append_char(&real_path, PATH_SEP);
+          string_builder_append(&real_path, file->name);
 
-      const size_t folder_name_len = strlen(folder->name);
-      const size_t file_name_len = strlen(file->name);
-      /*PATH_SEP + folder name + PATH_SEP + file name + null termination*/
-      const size_t real_path_len = 1 + folder_name_len + 1 + file_name_len + 1;
+          *type_id = file->var_type;
+          *timed = 1;
 
-      char *real_path = malloc(real_path_len + 1);
-      real_path[0] = PATH_SEP;
-      memcpy(&real_path[1], folder->name, folder_name_len);
-      real_path[1 + folder_name_len] = PATH_SEP;
-      memcpy(&real_path[1 + folder_name_len + 1], file->name, file_name_len);
-      real_path[real_path_len - 1] = '\0';
+          char *rv = string_builder_move(&real_path);
+          END_PROFILE_FUNC();
+          return rv;
+        }
+      }
 
+      string_builder_free(&real_path);
       END_PROFILE_FUNC();
-      return real_path;
+      return NULL;
+    } break;
     }
   }
 
-  /* Search for the metadata folder (Should be the last)*/
-  sub_folder = NULL;
-  i = folder->num_children - 1;
-  while (i >= 0) {
-    const binout_folder_t *search_folder =
-        &((const binout_folder_t *)folder->children)[i];
-    if (strcmp(search_folder->name, "metadata") == 0) {
-      sub_folder = search_folder;
-      break;
-    }
-
-    i--;
-  }
-
-  /* If the sub folder does not contain files for some reason ignore it*/
-  if (sub_folder &&
-      BINOUT_FOLDER_CHILDREN_GET_TYPE(sub_folder) == BINOUT_FILE &&
-      sub_folder->num_children != 0) {
-    /* Then check if the requested file is contained in said folder*/
-    const size_t file_index = binout_directory_binary_search_file(
-        (const binout_file_t *)sub_folder->children, 0,
-        sub_folder->num_children - 1, &pv);
-
-    if (file_index != (size_t)~0) {
-      const binout_file_t *file =
-          &((const binout_file_t *)sub_folder->children)[file_index];
-      *type_id = file->var_type;
-
-      const size_t folder_name_len = strlen(folder->name);
-      const size_t file_name_len = strlen(file->name);
-      /*PATH_SEP + folder name + PATH_SEP + metadata + PATH_SEP + file name +
-       * null termination*/
-      const size_t real_path_len =
-          1 + folder_name_len + 1 + 8 + 1 + file_name_len + 1;
-
-      char *real_path = malloc(real_path_len + 1);
-      real_path[0] = PATH_SEP;
-      memcpy(&real_path[1], folder->name, folder_name_len);
-      real_path[1 + folder_name_len] = PATH_SEP;
-      memcpy(&real_path[1 + folder_name_len + 1], "metadata", 8);
-      real_path[1 + folder_name_len + 1 + 8] = PATH_SEP;
-      memcpy(&real_path[1 + folder_name_len + 1 + 8 + 1], file->name,
-             file_name_len);
-      real_path[real_path_len - 1] = '\0';
-
-      END_PROFILE_FUNC();
-      return real_path;
-    }
-  }
-
+  char *rv = string_builder_move(&real_path);
   END_PROFILE_FUNC();
-  return NULL;
+  return rv;
 }
 
 const char *_binout_get_command_name(const uint64_t command) {
@@ -846,28 +762,16 @@ const char *_binout_get_type_name(const uint64_t type_id) {
 
 void _binout_add_file_error(binout_file *bin_file, const char *file_name,
                             const char *message) {
-  const char *middle = ": ";
-  const size_t file_name_length = strlen(file_name);
-  const size_t message_length = strlen(message);
-  const size_t middle_length = 2;
-
   bin_file->num_file_errors++;
   bin_file->file_errors = realloc(bin_file->file_errors,
                                   bin_file->num_file_errors * sizeof(char *));
 
+  string_builder_t new_file_error = string_builder_new();
+  string_builder_append(&new_file_error, file_name);
+  string_builder_append(&new_file_error, ": ");
+  string_builder_append(&new_file_error, message);
   bin_file->file_errors[bin_file->num_file_errors - 1] =
-      malloc(file_name_length + middle_length + message_length + 1);
-  memcpy(bin_file->file_errors[bin_file->num_file_errors - 1], file_name,
-         file_name_length);
-  memcpy(
-      &bin_file->file_errors[bin_file->num_file_errors - 1][file_name_length],
-      middle, middle_length);
-  memcpy(&bin_file->file_errors[bin_file->num_file_errors - 1]
-                               [file_name_length + middle_length],
-         message, message_length);
-  bin_file->file_errors[bin_file->num_file_errors - 1]
-                       [file_name_length + middle_length + message_length] =
-      '\0';
+      string_builder_move(&new_file_error);
 }
 
 int _binout_is_d_string(const char *folder_name) {
@@ -889,6 +793,22 @@ int _binout_is_d_string(const char *folder_name) {
 
   /* So that the string can not just be "d"*/
   return i != 1;
+}
+
+int _binout_is_metadata_string(const char *folder_name) {
+  const char *m = "metadata";
+  const size_t m_len = 8;
+  size_t i = 0;
+  /* This also checks if the null terminator is at the end*/
+  while (i < (m_len + 1)) {
+    if (folder_name[i] != m[i]) {
+      return 0;
+    }
+
+    i++;
+  }
+
+  return 1;
 }
 
 int _binout_path_view_is_d_string(const path_view_t *pv) {

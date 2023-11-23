@@ -27,6 +27,7 @@
 #define KEY_H
 
 #include "extra_string.h"
+#include "string_builder.h"
 #include <stdint.h>
 
 #define DEFAULT_VALUE_WIDTH 10
@@ -63,13 +64,41 @@ typedef struct {
   int ignore_not_found_includes; /* Wether to not parse and not output an error
                                    when not finding an include file. Default:
                                    0*/
+  char **extra_include_paths; /* Define some additional include paths which are
+                                 used to look for files under the INCLUDE
+                                 keyword and such*/
+  size_t num_extra_include_paths; /* The number of strings in the
+                                     extra_include_paths array*/
 } key_parse_config_t;
+
+/* Holds all variables used for recursion*/
+typedef struct {
+  char **include_paths;     /* Holds all paths that are added with INCLUDE_PATH
+                               keywords and such*/
+  size_t num_include_paths; /* The number of include paths*/
+  char *root_folder;        /* The folder which contains the file with which the
+                               function was invoked first*/
+  int extra_include_paths_applied; /* Wether the additional include paths of the
+                                      parse config have already been applied*/
+} key_parse_recursion_t;
 
 /* Returns a key_parse_config_t with all values set to the default*/
 key_parse_config_t key_default_parse_config();
 
+/* Holds information about the current state when parsing a key file*/
+typedef struct {
+  const char *file_name;      /* Name of the current file*/
+  size_t line_number;         /* Current line*/
+  char *const *include_paths; /* Array containing the include paths where
+                                        it looks for include files (including
+                                        working directory)*/
+  size_t num_include_paths;   /* The number of elements in include_paths*/
+  const char *root_folder; /* The folder which contains the initial file of the
+                              parse call*/
+} key_parse_info_t;
+
 /* The type of the callback that is called in key_file_parse_with_callback*/
-typedef void (*key_file_callback)(const char *file_name, size_t line_number,
+typedef void (*key_file_callback)(key_parse_info_t info,
                                   const char *keyword_name, card_t *card,
                                   size_t card_index, void *user_data);
 
@@ -93,15 +122,12 @@ keyword_t *key_file_parse(const char *file_name, size_t *num_keywords,
 /* Same as key_file_parse, but instead of returning an array it calls an
  * callback every time a card (or empty keyword) is encountered.
  * user_data: will be given to the callback untouched.
- * include_paths, num_include_paths, root_folder: these are only used for
- * recursion and should be set to NULL*/
+ * rec: only used for recursion and should be set to NULL*/
 void key_file_parse_with_callback(const char *file_name,
                                   key_file_callback callback,
                                   const key_parse_config_t *parse_config,
                                   char **error_string, char **warning_string,
-                                  void *user_data, char ***include_paths,
-                                  size_t *num_include_paths,
-                                  const char *root_folder);
+                                  void *user_data, key_parse_recursion_t *rec);
 /* Deallocates the data returned by key_file_parse*/
 void key_file_free(keyword_t *keywords, size_t num_keywords);
 /* Returns a certain keyword with name. If the key file contains more keywords
@@ -210,17 +236,8 @@ card_parse_type card_parse_get_type_width(const card_t *card,
 void _card_cpy(const card_t *card, char *dst, size_t len);
 /* Handles the parsing of multi line string for include file names. Returns
  * wether the multi line string has been completely parsed.*/
-int _parse_multi_line_string(char **multi_line_string, size_t *multi_line_index,
+int _parse_multi_line_string(string_builder_t *multi_line_string,
                              const card_t *card, size_t line_length);
-void _parse_include_file_name_card(
-    const card_t *card, size_t *card_index, const extra_string *line,
-    size_t line_length, char **current_multi_line_string,
-    size_t *current_multi_line_index, size_t *num_include_paths,
-    char ***include_paths, key_file_callback callback, void *user_data,
-    char **error_stack, size_t *error_stack_size, size_t *error_ptr,
-    char **warning_stack, size_t *warning_stack_size, size_t *warning_ptr,
-    const char *file_name, size_t line_count, const char *root_folder,
-    const key_parse_config_t *parse_config);
 /* -----------------------------*/
 
 #ifdef __cplusplus

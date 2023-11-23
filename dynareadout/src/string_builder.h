@@ -23,45 +23,44 @@
  * 3. This notice may not be removed or altered from any source distribution.
  ************************************************************************************/
 
-#ifndef LINE_H
-#define LINE_H
+#ifndef STRING_BUILDER_H
+#define STRING_BUILDER_H
 
-#include "extra_string.h"
-#include <stdio.h>
+#include <stddef.h>
 
-#define LINE_READER_BUFFER_SIZE (1024 * 1024) /* 1MB */
-
-/* All the state for the read_line function*/
+/* Used to construct string out of multiple other strings and characters*/
 typedef struct {
-  FILE *file;
-  extra_string line; /* This stores the read line after a read_line call*/
-  size_t
-      line_length; /* The length of the line when considering inline comments*/
-  size_t comment_index; /* An index into line to where a comment can be found.
-                           Is ~0 if no comment has been found*/
-
-  /* Internal variables used in read_line*/
-  char *buffer; /* The file is read in LINE_READER_BUFFER_SIZE sized chunks*/
-  size_t buffer_index;
-  size_t bytes_read;
-  size_t extra_capacity;
-} line_reader_t;
+  char *buffer;
+  size_t ptr;
+  size_t cap;
+} string_builder_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Initialise all variables of the line reader. Needs to be deallocated by
- * free_line_reader*/
-line_reader_t new_line_reader(FILE *file);
+/* Returns a string builder with all values initialized to the default. Needs to
+ * be deallocated by string_builder_free*/
+string_builder_t string_builder_new();
+/* Add a string*/
+void string_builder_append(string_builder_t *b, const char *s);
+/* Add a char*/
+void string_builder_append_char(string_builder_t *b, char c);
+/* Add a string and use l instead of strlen*/
+void string_builder_append_len(string_builder_t *b, const char *s, size_t l);
+/* Returns the underlying buffer and sets all values of b to the default*/
+char *string_builder_move(string_builder_t *b);
+/* Deallocates all memory of b*/
+void string_builder_free(string_builder_t *b);
 
-/* Reads from file until it encounters the next new line and stores the
- * resulting string in line. Also supports carriage return. Returns 0 if the
- * file has been completely parsed and non 0 if the line can be processed*/
-int read_line(line_reader_t *lr);
+/* Same as libc's strdup: Allocates memory and copies the contents of str and
+ * returns them. Needs to be deallocated by free.*/
+char *string_clone(const char *str);
 
-/* Frees all allocated memory of a line reader*/
-void free_line_reader(line_reader_t lr);
+/* Same as string_clone but use len instead of strlen: Allocates memory and
+ * copies the contents of str and returns them. Needs to be deallocated by
+ * free.*/
+char *string_clone_len(const char *str, size_t len);
 
 #ifdef __cplusplus
 }

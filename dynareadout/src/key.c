@@ -29,52 +29,52 @@
 #include "profiling.h"
 #include <errno.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define ERROR_MSG(msg)                                                         \
-  const size_t error_msg_len = strlen(msg);                                    \
-  error_stack_size += error_msg_len + 1;                                       \
-  error_stack = realloc(error_stack, error_stack_size);                        \
-  memcpy(&error_stack[error_ptr], msg, error_msg_len);                         \
-  error_ptr += error_msg_len;                                                  \
-  error_stack[error_ptr] = '\n';                                               \
-  error_ptr++
-#define ERROR_F(msg, ...)                                                      \
-  const int error_buffer_size = snprintf(NULL, 0, msg, __VA_ARGS__);           \
-  error_stack_size += error_buffer_size + 1;                                   \
-  error_stack = realloc(error_stack, error_stack_size);                        \
-  sprintf(&error_stack[error_ptr], msg, __VA_ARGS__);                          \
-  error_ptr += error_buffer_size;                                              \
-  error_stack[error_ptr] = '\n';                                               \
-  error_ptr++;
+void _message_stack_push(string_builder_t *stack, const char *msg) {
+  /* Add a new line after the previous message*/
+  if (stack->cap != 0) {
+    string_builder_append_char(stack, '\n');
+  }
+  string_builder_append(stack, msg);
+}
+
+void _message_stack_push_f(string_builder_t *stack, const char *f, ...) {
+  va_list args;
+
+  char buffer[1024];
+
+  va_start(args, f);
+  vsprintf(buffer, f, args);
+  va_end(args);
+
+  _message_stack_push(stack, buffer);
+}
+
+#define ERROR_MSG(msg) _message_stack_push(&error_stack, msg)
+#define ERROR_F(f, ...) _message_stack_push_f(&error_stack, f, __VA_ARGS__)
 #define ERROR_ERRNO(msg) ERROR_F(msg, strerror(errno));
-#define WARNING_MSG(msg)                                                       \
-  const size_t warning_msg_len = strlen(msg);                                  \
-  warning_stack_size += warning_msg_len + 1;                                   \
-  warning_stack = realloc(warning_stack, warning_stack_size);                  \
-  memcpy(&warning_stack[warning_ptr], msg, warning_msg_len);                   \
-  warning_ptr += warning_msg_len;                                              \
-  warning_stack[warning_ptr] = '\n';                                           \
-  warning_ptr++
-#define WARNING_F(msg, ...)                                                    \
-  const int warning_buffer_size = snprintf(NULL, 0, msg, __VA_ARGS__);         \
-  warning_stack_size += warning_buffer_size + 1;                               \
-  warning_stack = realloc(warning_stack, warning_stack_size);                  \
-  sprintf(&warning_stack[warning_ptr], msg, __VA_ARGS__);                      \
-  warning_ptr += warning_buffer_size;                                          \
-  warning_stack[warning_ptr] = '\n';                                           \
-  warning_ptr++;
+#define WARNING_MSG(msg) _message_stack_push(&warning_stack, msg)
+#define WARNING_F(f, ...) _message_stack_push_f(&warning_stack, f, __VA_ARGS__)
 #define WARNING_ERRNO(msg) WARNING_F(msg, strerror(errno));
 #define ERROR_KEYWORD_NOT_IMPLEMENTED(keyword)                                 \
   ERROR_F("%s:%lu: The keyword %s is not implemented", file_name,              \
           current_keyword_line, keyword)
 
+#define KEY_PARSE_INFO()                                                       \
+  key_parse_info_t info;                                                       \
+  info.file_name = file_name;                                                  \
+  info.line_number = line_count;                                               \
+  info.include_paths = rec_ptr->include_paths;                                 \
+  info.num_include_paths = rec_ptr->num_include_paths;                         \
+  info.root_folder = rec_ptr->root_folder
+
 key_parse_config_t key_default_parse_config() {
-  key_parse_config_t c;
+  key_parse_config_t c = {0};
   c.parse_includes = 1;
-  c.ignore_not_found_includes = 0;
   return c;
 }
 
@@ -84,9 +84,8 @@ typedef struct {
   size_t *num_keywords;
 } key_file_parse_data;
 
-void key_file_parse_callback(const char *file_name, size_t line_number,
-                             const char *keyword_name, card_t *card,
-                             size_t card_index, void *user_data) {
+void key_file_parse_callback(key_parse_info_t info, const char *keyword_name,
+                             card_t *card, size_t card_index, void *user_data) {
   key_file_parse_data *data = (key_file_parse_data *)user_data;
 
   if (!data->current_keyword || card_index == 0 || card_index == (size_t)~0) {
@@ -124,9 +123,7 @@ void key_file_parse_callback(const char *file_name, size_t line_number,
     data->current_keyword->cards = NULL;
     data->current_keyword->num_cards = 0;
 
-    const size_t keyword_len = strlen(keyword_name);
-    data->current_keyword->name = malloc(keyword_len + 1);
-    memcpy(data->current_keyword->name, keyword_name, keyword_len + 1);
+    data->current_keyword->name = string_clone(keyword_name);
   }
 
   if (!card) {
@@ -140,9 +137,7 @@ void key_file_parse_callback(const char *file_name, size_t line_number,
               data->current_keyword->num_cards * sizeof(card_t));
   card_t *keyword_card =
       &data->current_keyword->cards[data->current_keyword->num_cards - 1];
-  const size_t card_len = strlen(card->string);
-  keyword_card->string = malloc(card_len + 1);
-  memcpy(keyword_card->string, card->string, card_len + 1);
+  keyword_card->string = string_clone(card->string);
 }
 
 keyword_t *key_file_parse(const char *file_name, size_t *num_keywords,
@@ -160,7 +155,7 @@ keyword_t *key_file_parse(const char *file_name, size_t *num_keywords,
 
   key_file_parse_with_callback(file_name, key_file_parse_callback, parse_config,
                                &internal_error_string, warning_string, &data,
-                               NULL, NULL, NULL);
+                               NULL);
 
   /* Deallocate the memory if an error occurred*/
   if (internal_error_string) {
@@ -184,26 +179,25 @@ void key_file_parse_with_callback(const char *file_name,
                                   key_file_callback callback,
                                   const key_parse_config_t *_parse_config,
                                   char **error_string, char **warning_string,
-                                  void *user_data, char ***include_paths,
-                                  size_t *num_include_paths,
-                                  const char *root_folder) {
+                                  void *user_data, key_parse_recursion_t *rec) {
   BEGIN_PROFILE_FUNC();
 
-  /* Variables to stack multiple errors*/
-  char *error_stack = NULL;
-  size_t error_stack_size = 0;
-  size_t error_ptr = 0;
+  if (error_string) {
+    *error_string = NULL;
+  }
+  if (warning_string) {
+    *warning_string = NULL;
+  }
 
-  char *warning_stack = NULL;
-  size_t warning_stack_size = 0;
-  size_t warning_ptr = 0;
+  /* Variables to stack multiple errors*/
+  string_builder_t error_stack = string_builder_new(),
+                   warning_stack = string_builder_new();
 
   FILE *file = fopen(file_name, "rb");
   if (!file) {
     if (error_string) {
       ERROR_ERRNO("Failed to open key file: %s");
-      error_stack[error_stack_size - 1] = '\0';
-      *error_string = error_stack;
+      *error_string = string_builder_move(&error_stack);
     }
     if (warning_string) {
       *warning_string = NULL;
@@ -212,54 +206,39 @@ void key_file_parse_with_callback(const char *file_name,
     return;
   }
 
-  /* This points to the include paths*/
-  char ***include_paths_ptr;
-  size_t *num_include_paths_ptr;
-  /* Stores the parent directory of the first file passed to
-   * key_file_parse_with_callback*/
-  char *root_folder_ptr;
+  /* Data for recursion. Stores all include paths*/
+  key_parse_recursion_t *rec_ptr = NULL;
 
-  if (!include_paths) {
-    include_paths_ptr = malloc(sizeof(char **));
-    *include_paths_ptr = NULL;
-  } else {
-    include_paths_ptr = include_paths;
-  }
+  if (!rec) {
+    rec_ptr = malloc(sizeof(key_parse_recursion_t));
+    rec_ptr->include_paths = NULL;
+    rec_ptr->num_include_paths = 0;
+    rec_ptr->extra_include_paths_applied = 0;
 
-  if (!num_include_paths) {
-    num_include_paths_ptr = malloc(sizeof(size_t));
-    *num_include_paths_ptr = 0;
-  } else {
-    num_include_paths_ptr = num_include_paths;
-  }
-
-  if (!root_folder) {
     const size_t index = path_move_up_real(file_name);
     if (index == (size_t)~0) {
-      root_folder_ptr = path_working_directory();
+      rec_ptr->root_folder = path_working_directory();
     } else {
       if (path_is_abs(file_name)) {
-        root_folder_ptr = malloc(index + 1 + 1);
-        memcpy(root_folder_ptr, file_name, index + 1);
-        root_folder_ptr[index + 1] = '\0';
+        rec_ptr->root_folder = string_clone_len(file_name, index + 1);
       } else {
         char *current_wd = path_working_directory();
-        root_folder_ptr = path_join(current_wd, file_name);
-        root_folder_ptr[path_move_up_real(root_folder_ptr) + 1] = '\0';
+        rec_ptr->root_folder = path_join_real(current_wd, file_name);
+        rec_ptr->root_folder[path_move_up_real(rec_ptr->root_folder) + 1] =
+            '\0';
         free(current_wd);
       }
     }
   } else {
-    root_folder_ptr = (char *)root_folder;
+    rec_ptr = rec;
   }
 
-  if (*num_include_paths_ptr == 0) {
+  if (rec_ptr->num_include_paths == 0) {
     /* Add the current working directory (local directory) to the
      * include paths*/
-    (*num_include_paths_ptr)++;
-    *include_paths_ptr =
-        realloc(*include_paths_ptr, *num_include_paths_ptr * sizeof(char *));
-    (*include_paths_ptr)[*num_include_paths_ptr - 1] = path_working_directory();
+    rec_ptr->num_include_paths = 1;
+    rec_ptr->include_paths = malloc(sizeof(char *));
+    rec_ptr->include_paths[0] = path_working_directory();
   }
 
   /* Setup parse config*/
@@ -268,6 +247,24 @@ void key_file_parse_with_callback(const char *file_name,
     parse_config = *_parse_config;
   } else {
     parse_config = key_default_parse_config();
+  }
+
+  /* Add the additional include paths to the include_paths array*/
+  if (!rec_ptr->extra_include_paths_applied) {
+    const size_t j = rec_ptr->num_include_paths;
+    rec_ptr->num_include_paths += parse_config.num_extra_include_paths;
+    rec_ptr->include_paths = realloc(
+        rec_ptr->include_paths, rec_ptr->num_include_paths * sizeof(char *));
+
+    size_t i = 0;
+    while (i < parse_config.num_extra_include_paths) {
+      rec_ptr->include_paths[j + i] =
+          string_clone(parse_config.extra_include_paths[i]);
+
+      i++;
+    }
+
+    rec_ptr->extra_include_paths_applied = 1;
   }
 
   line_reader_t line_reader = new_line_reader(file);
@@ -280,14 +277,14 @@ void key_file_parse_with_callback(const char *file_name,
   size_t card_index = 0;
   size_t line_count = 0;
 
-  char *current_multi_line_string = NULL;
-  size_t current_multi_line_index = 0;
+  string_builder_t current_multi_line_string = string_builder_new();
 
   /* Loop until all lines have been read or an error occurred*/
   while (read_line(&line_reader)) {
     line_count++;
 
-    /* Check if the line starts with a comment or contains a comment character*/
+    /* Check if the line starts with a comment or contains a comment
+     * character*/
     if (line_reader.comment_index == 0) {
       /* The entire line is a comment. Ignore it.*/
       continue;
@@ -323,8 +320,8 @@ void key_file_parse_with_callback(const char *file_name,
           keyword_name[current_keyword_length] = '\0';
         }
 
-        callback(file_name, line_count, keyword_name, NULL, (size_t)~0,
-                 user_data);
+        KEY_PARSE_INFO();
+        callback(info, keyword_name, NULL, (size_t)~0, user_data);
 
         if (keyword_name != current_keyword_name.buffer) {
           free(keyword_name);
@@ -369,25 +366,82 @@ void key_file_parse_with_callback(const char *file_name,
 
       /* -------- ⛅ Include Parsing ⛅ -------*/
       if (extra_string_starts_with(&current_keyword_name, "INCLUDE")) {
-        /* Also parse the INCLUDE keywords even when parse_includes is set to 0
-         * to support multi line include file names*/
+        /* Also parse the INCLUDE keywords even when parse_includes is set to
+         * 0 to support multi line include file names*/
         if (parse_config.parse_includes) {
-          /* Parse all the different INCLUDE keywords*/
-          if (extra_string_compare(&current_keyword_name, "INCLUDE") == 0) {
-            _parse_include_file_name_card(
-                &card, &card_index, &line_reader.line, line_reader.line_length,
-                &current_multi_line_string, &current_multi_line_index,
-                num_include_paths_ptr, include_paths_ptr, callback, user_data,
-                &error_stack, &error_stack_size, &error_ptr, &warning_stack,
-                &warning_stack_size, &warning_ptr, file_name, line_count,
-                root_folder_ptr, &parse_config);
+          /* Parse the current card as a file name that should be included*/
+          if (extra_string_compare(&current_keyword_name, "INCLUDE") == 0 ||
+              (extra_string_compare(&current_keyword_name, "INCLUDE_BINARY") ==
+                   0 &&
+               card_index == 0) ||
+              (extra_string_compare(&current_keyword_name, "INCLUDE_NASTRAN") ==
+                   0 &&
+               card_index == 0)) {
+            /* Support multi line file names (LS Dyna Manual Volume I
+             * *INCLUDE Remark 2, p. 2690)*/
+            if (_parse_multi_line_string(&current_multi_line_string, &card,
+                                         line_reader.line_length)) {
+              /* Loop over all include paths and look for the file*/
+              char *full_include_file_name = NULL;
+              size_t i = 0;
+              while (i < rec_ptr->num_include_paths) {
+                full_include_file_name =
+                    path_join(rec_ptr->include_paths[i],
+                              current_multi_line_string.buffer);
+                if (path_is_file(full_include_file_name)) {
+                  break;
+                }
+                free(full_include_file_name);
+                full_include_file_name = NULL;
+
+                i++;
+              }
+
+              if (full_include_file_name) {
+                char *include_error, *include_warning;
+                /* Call the function recursively*/
+                key_file_parse_with_callback(
+                    full_include_file_name, callback, &parse_config,
+                    &include_error, &include_warning, user_data, rec_ptr);
+                free(full_include_file_name);
+
+                /* Add the error to the error stack if an error occurred in
+                 * the recursive call*/
+                if (include_error != NULL) {
+                  ERROR_MSG(include_error);
+                  free(include_error);
+                }
+                /* Add the warning to the warning stack if a warning occurred
+                 * in the recursive call*/
+                if (include_warning != NULL) {
+                  WARNING_MSG(include_warning);
+                  free(include_warning);
+                }
+              } else {
+                const char *format_str = "%s:%zu: \"%s\" could not be found";
+
+                if (parse_config.ignore_not_found_includes) {
+                  WARNING_F(format_str, file_name, line_count,
+                            current_multi_line_string.buffer);
+                } else {
+                  ERROR_F(format_str, file_name, line_count,
+                          current_multi_line_string.buffer);
+                }
+              }
+
+              string_builder_free(&current_multi_line_string);
+              card_index++;
+            }
+
+            if (card.string != line_reader.line.buffer) {
+              free(card.string);
+            }
             continue;
           } else if (extra_string_compare(&current_keyword_name,
                                           "INCLUDE_PATH") == 0) {
             /* Support multi line file names (LS Dyna Manual Volume I
              * *INCLUDE Remark 2, p. 2690)*/
-            if (!_parse_multi_line_string(&current_multi_line_string,
-                                          &current_multi_line_index, &card,
+            if (!_parse_multi_line_string(&current_multi_line_string, &card,
                                           line_reader.line_length)) {
               /* continue without calling the callback for the card*/
               if (card.string != line_reader.line.buffer) {
@@ -396,19 +450,19 @@ void key_file_parse_with_callback(const char *file_name,
               continue;
             }
 
-            if (!path_is_directory(current_multi_line_string)) {
+            if (!path_is_directory(current_multi_line_string.buffer)) {
               WARNING_F("%s:%zu: INCLUDE_PATH has not been found: \"%s\"",
-                        file_name, line_count, current_multi_line_string);
-              free(current_multi_line_string);
+                        file_name, line_count,
+                        current_multi_line_string.buffer);
+              string_builder_free(&current_multi_line_string);
             } else {
-              (*num_include_paths_ptr)++;
-              *include_paths_ptr = realloc(
-                  *include_paths_ptr, *num_include_paths_ptr * sizeof(char *));
-              (*include_paths_ptr)[*num_include_paths_ptr - 1] =
-                  current_multi_line_string;
+              rec_ptr->num_include_paths++;
+              rec_ptr->include_paths =
+                  realloc(rec_ptr->include_paths,
+                          rec_ptr->num_include_paths * sizeof(char *));
+              rec_ptr->include_paths[rec_ptr->num_include_paths - 1] =
+                  string_builder_move(&current_multi_line_string);
             }
-            current_multi_line_string = NULL;
-            current_multi_line_index = 0;
 
             /* continue without calling the callback for the card*/
             if (card.string != line_reader.line.buffer) {
@@ -421,8 +475,7 @@ void key_file_parse_with_callback(const char *file_name,
                                           "INCLUDE_PATH_RELATIVE") == 0) {
             /* Support multi line file names (LS Dyna Manual Volume I
              * *INCLUDE Remark 2, p. 2690)*/
-            if (!_parse_multi_line_string(&current_multi_line_string,
-                                          &current_multi_line_index, &card,
+            if (!_parse_multi_line_string(&current_multi_line_string, &card,
                                           line_reader.line_length)) {
               /* continue without calling the callback for the card*/
               if (card.string != line_reader.line.buffer) {
@@ -431,11 +484,9 @@ void key_file_parse_with_callback(const char *file_name,
               continue;
             }
 
-            char *full_include_path_name =
-                path_join(root_folder_ptr, current_multi_line_string);
-            free(current_multi_line_string);
-            current_multi_line_string = NULL;
-            current_multi_line_index = 0;
+            char *full_include_path_name = path_join(
+                rec_ptr->root_folder, current_multi_line_string.buffer);
+            string_builder_free(&current_multi_line_string);
 
             if (!path_is_directory(full_include_path_name)) {
               WARNING_F(
@@ -443,10 +494,11 @@ void key_file_parse_with_callback(const char *file_name,
                   file_name, line_count, full_include_path_name);
               free(full_include_path_name);
             } else {
-              (*num_include_paths_ptr)++;
-              *include_paths_ptr = realloc(
-                  *include_paths_ptr, *num_include_paths_ptr * sizeof(char *));
-              (*include_paths_ptr)[*num_include_paths_ptr - 1] =
+              rec_ptr->num_include_paths++;
+              rec_ptr->include_paths =
+                  realloc(rec_ptr->include_paths,
+                          rec_ptr->num_include_paths * sizeof(char *));
+              rec_ptr->include_paths[rec_ptr->num_include_paths - 1] =
                   full_include_path_name;
             }
 
@@ -459,22 +511,11 @@ void key_file_parse_with_callback(const char *file_name,
             continue;
           } else if (extra_string_compare(&current_keyword_name,
                                           "INCLUDE_BINARY") == 0) {
-            /* Parse the first card like a normal INCLUDE*/
-            if (card_index == 0) {
-              _parse_include_file_name_card(
-                  &card, &card_index, &line_reader.line,
-                  line_reader.line_length, &current_multi_line_string,
-                  &current_multi_line_index, num_include_paths_ptr,
-                  include_paths_ptr, callback, user_data, &error_stack,
-                  &error_stack_size, &error_ptr, &warning_stack,
-                  &warning_stack_size, &warning_ptr, file_name, line_count,
-                  root_folder_ptr, &parse_config);
-              continue;
-            } else {
-              WARNING_F(
-                  "%s:%zu: Invalid number of cards for INCLUDE_BINARY keyword",
-                  file_name, line_count);
-            }
+            /* INCLUDE_BINARY does only have one card (which is parsed
+             * above)*/
+            WARNING_F("%s:%zu: Invalid number of cards (%zu) for "
+                      "INCLUDE_BINARY keyword",
+                      file_name, line_count, card_index + 1);
 
             /* continue without calling the callback for the card*/
             if (card.string != line_reader.line.buffer) {
@@ -485,23 +526,11 @@ void key_file_parse_with_callback(const char *file_name,
             continue;
           } else if (extra_string_compare(&current_keyword_name,
                                           "INCLUDE_NASTRAN") == 0) {
-            /* Parse the first card like a normal INCLUDE*/
-            if (card_index == 0) {
-              _parse_include_file_name_card(
-                  &card, &card_index, &line_reader.line,
-                  line_reader.line_length, &current_multi_line_string,
-                  &current_multi_line_index, num_include_paths_ptr,
-                  include_paths_ptr, callback, user_data, &error_stack,
-                  &error_stack_size, &error_ptr, &warning_stack,
-                  &warning_stack_size, &warning_ptr, file_name, line_count,
-                  root_folder_ptr, &parse_config);
-              continue;
-            } else if (card_index == 1) {
-              /* Ignore the card it is irrelevant for the parsing*/
-            } else {
-              WARNING_F(
-                  "%s:%zu: Invalid number of cards for INCLUDE_NASTRAN keyword",
-                  file_name, line_count);
+            /* The include file name is already parsed above*/
+            if (card_index != 1) {
+              WARNING_F("%s:%zu: Invalid number of cards (%zu) for "
+                        "INCLUDE_NASTRAN keyword",
+                        file_name, line_count, card_index + 1);
             }
 
             /* continue without calling the callback for the card*/
@@ -517,8 +546,7 @@ void key_file_parse_with_callback(const char *file_name,
              * needs to parse them himself*/
           } else {
             if (card_index == 0 &&
-                !_parse_multi_line_string(&current_multi_line_string,
-                                          &current_multi_line_index, &card,
+                !_parse_multi_line_string(&current_multi_line_string, &card,
                                           line_reader.line_length)) {
               /* continue without calling the callback for the card*/
               if (card.string != line_reader.line.buffer) {
@@ -538,8 +566,7 @@ void key_file_parse_with_callback(const char *file_name,
                                      "INCLUDE_PATH_RELATIVE") == 0;
 
             if (all_cards_are_filenames || card_index == 0) {
-              if (!_parse_multi_line_string(&current_multi_line_string,
-                                            &current_multi_line_index, &card,
+              if (!_parse_multi_line_string(&current_multi_line_string, &card,
                                             line_reader.line_length)) {
                 /* continue without calling the callback for the card*/
                 if (card.string != line_reader.line.buffer) {
@@ -553,11 +580,11 @@ void key_file_parse_with_callback(const char *file_name,
       }
       /* ------- ⛅ End of Include Parsing ⛅ -------*/
 
-      if (current_multi_line_string) {
+      if (current_multi_line_string.buffer) {
         if (card.string != line_reader.line.buffer) {
           free(card.string);
         }
-        card.string = current_multi_line_string;
+        card.string = string_builder_move(&current_multi_line_string);
       }
 
       char *keyword_name;
@@ -570,17 +597,15 @@ void key_file_parse_with_callback(const char *file_name,
         keyword_name[current_keyword_length] = '\0';
       }
 
-      callback(file_name, line_count, keyword_name, &card, card_index,
-               user_data);
+      KEY_PARSE_INFO();
+      callback(info, keyword_name, &card, card_index, user_data);
 
       if (card.string != line_reader.line.buffer) {
         free(card.string);
-        current_multi_line_string = NULL;
       }
       if (keyword_name != current_keyword_name.buffer) {
         free(keyword_name);
       }
-      current_multi_line_index = 0;
 
       card_index++;
     }
@@ -608,14 +633,15 @@ void key_file_parse_with_callback(const char *file_name,
       }
 
       card_t card;
-      if (current_multi_line_string) {
-        card.string = current_multi_line_string;
+      if (current_multi_line_string.buffer) {
+        card.string = string_builder_move(&current_multi_line_string);
       } else {
         card.string = NULL;
       }
 
-      callback(file_name, line_count, keyword_name, card.string ? &card : NULL,
-               (size_t)~0, user_data);
+      KEY_PARSE_INFO();
+      callback(info, keyword_name, card.string ? &card : NULL, (size_t)~0,
+               user_data);
 
       if (keyword_name != current_keyword_name.buffer) {
         free(keyword_name);
@@ -626,50 +652,37 @@ void key_file_parse_with_callback(const char *file_name,
     }
   }
 
-  /* Free all include paths*/
-  if (!include_paths) {
+  /* Free all recursion data (include paths, root folder)*/
+  if (!rec) {
     size_t i = 0;
-    while (i < *num_include_paths_ptr) {
-      free((*include_paths_ptr)[i]);
+    while (i < rec_ptr->num_include_paths) {
+      free(rec_ptr->include_paths[i]);
 
       i++;
     }
-    free(*include_paths_ptr);
-    free(include_paths_ptr);
-  }
-  if (!num_include_paths) {
-    free(num_include_paths_ptr);
-  }
-  if (!root_folder) {
-    free(root_folder_ptr);
+    free(rec_ptr->include_paths);
+    free(rec_ptr->root_folder);
+    free(rec_ptr);
   }
 
   free(line_reader.line.extra);
   free(current_keyword_name.extra);
 
+  free_line_reader(line_reader);
   fclose(file);
 
-  if (error_stack) {
-    if (!error_string) {
-      free(error_stack);
-    } else {
-      error_stack[error_stack_size - 1] = '\0';
-      *error_string = error_stack;
-    }
-  } else if (error_string) {
-    *error_string = NULL;
+  /* Convert the error stack into an error string*/
+  if (error_stack.buffer && error_string) {
+    *error_string = string_builder_move(&error_stack);
   }
 
-  if (warning_stack) {
-    if (!warning_string) {
-      free(warning_stack);
-    } else {
-      warning_stack[warning_stack_size - 1] = '\0';
-      *warning_string = warning_stack;
-    }
-  } else if (warning_string) {
-    *warning_string = NULL;
+  /* Convert the warning stack into a warning string*/
+  if (warning_stack.buffer && warning_string) {
+    *warning_string = string_builder_move(&warning_stack);
   }
+
+  string_builder_free(&error_stack);
+  string_builder_free(&warning_stack);
 
   END_PROFILE_FUNC();
 }
@@ -1330,10 +1343,9 @@ char *card_parse_string_width(const card_t *card, uint8_t value_width) {
     i++;
   }
 
-  char *value = malloc(end_index - start_index + 1 + 1);
-  memcpy(value, &card->string[start_index + card->current_index],
-         end_index - start_index + 1);
-  value[end_index - start_index + 1] = '\0';
+  char *value =
+      string_clone_len(&card->string[start_index + card->current_index],
+                       end_index - start_index + 1);
 
   END_PROFILE_FUNC();
   return value;
@@ -1342,9 +1354,8 @@ char *card_parse_string_width(const card_t *card, uint8_t value_width) {
 char *card_parse_string_width_no_trim(const card_t *card, uint8_t value_width) {
   BEGIN_PROFILE_FUNC();
 
-  char *value = malloc(value_width + 1);
-  memcpy(value, &card->string[card->current_index], value_width);
-  value[value_width] = '\0';
+  char *value =
+      string_clone_len(&card->string[card->current_index], value_width);
 
   END_PROFILE_FUNC();
   return value;
@@ -1368,9 +1379,8 @@ char *card_parse_whole(const card_t *card) {
     i++;
   }
 
-  char *value = malloc(end_index - start_index + 1 + 1);
-  memcpy(value, &card->string[start_index], end_index - start_index + 1);
-  value[end_index - start_index + 1] = '\0';
+  char *value =
+      string_clone_len(&card->string[start_index], end_index - start_index + 1);
 
   END_PROFILE_FUNC();
   return value;
@@ -1379,9 +1389,7 @@ char *card_parse_whole(const card_t *card) {
 char *card_parse_whole_no_trim(const card_t *card) {
   BEGIN_PROFILE_FUNC();
 
-  const size_t len = strlen(card->string);
-  char *value = malloc(len + 1);
-  memcpy(value, card->string, len + 1);
+  char *value = string_clone(card->string);
 
   END_PROFILE_FUNC();
   return value;
@@ -1521,24 +1529,20 @@ void _card_cpy(const card_t *card, char *dst, size_t len) {
   END_PROFILE_FUNC();
 }
 
-int _parse_multi_line_string(char **multi_line_string, size_t *multi_line_index,
+int _parse_multi_line_string(string_builder_t *multi_line_string,
                              const card_t *card, size_t line_length) {
   BEGIN_PROFILE_FUNC();
 
   size_t card_string_index = 0;
 
-  if (!*multi_line_string) {
-    /* The maximum size of an include file name is 236 (+ null
-     * terminator)*/
-    *multi_line_string = malloc(237 * sizeof(char));
+  if (multi_line_string->cap == 0) {
     /* Trim leading white space*/
     while (card_string_index != line_length &&
            card->string[card_string_index] == ' ') {
       card_string_index++;
     }
     if (card_string_index == line_length) {
-      (*multi_line_string)[0] = '\0';
-
+      string_builder_append_char(multi_line_string, '\0');
       END_PROFILE_FUNC();
       return 1;
     }
@@ -1546,142 +1550,26 @@ int _parse_multi_line_string(char **multi_line_string, size_t *multi_line_index,
 
   line_length -= card_string_index;
 
-  /* Support multi line strings which are longer than 236 (out of spec)*/
-  if (*multi_line_index + line_length > 236) {
-    *multi_line_string =
-        realloc(*multi_line_string,
-                (*multi_line_index + line_length + 1) * sizeof(char));
-  }
+  string_builder_append_len(multi_line_string, &card->string[card_string_index],
+                            line_length);
 
-  memcpy(&(*multi_line_string)[*multi_line_index],
-         &card->string[card_string_index], line_length);
-  *multi_line_index += line_length;
-  if ((*multi_line_string)[*multi_line_index - 2] == ' ' &&
-      (*multi_line_string)[*multi_line_index - 1] == '+') {
+  if (multi_line_string->buffer[multi_line_string->ptr - 2] == ' ' &&
+      multi_line_string->buffer[multi_line_string->ptr - 1] == '+') {
     /* We have a multi line file name*/
-    *multi_line_index -= 2;
+    multi_line_string->ptr -= 2;
 
     END_PROFILE_FUNC();
     return 0;
   }
 
   /* Trim trailing white space*/
-  while ((*multi_line_string)[*multi_line_index - 1] == ' ' &&
-         *multi_line_index != 0) {
-    (*multi_line_index)--;
+  while (multi_line_string->buffer[multi_line_string->ptr - 1] == ' ' &&
+         multi_line_string->ptr != 0) {
+    multi_line_string->ptr--;
   }
 
-  (*multi_line_string)[*multi_line_index] = '\0';
+  multi_line_string->buffer[multi_line_string->ptr] = '\0';
 
   END_PROFILE_FUNC();
   return 1;
-}
-
-void _parse_include_file_name_card(
-    const card_t *card, size_t *card_index, const extra_string *line,
-    size_t line_length, char **current_multi_line_string,
-    size_t *current_multi_line_index, size_t *num_include_paths,
-    char ***include_paths, key_file_callback callback, void *user_data,
-    char **error_stack, size_t *error_stack_size, size_t *error_ptr,
-    char **warning_stack, size_t *warning_stack_size, size_t *warning_ptr,
-    const char *file_name, size_t line_count, const char *root_folder,
-    const key_parse_config_t *parse_config) {
-  /* Support multi line file names (LS Dyna Manual Volume I
-   * *INCLUDE Remark 2, p. 2690)*/
-  if (!_parse_multi_line_string(current_multi_line_string,
-                                current_multi_line_index, card, line_length)) {
-    /* continue without calling the callback for the card*/
-    if (card->string != line->buffer) {
-      free(card->string);
-    }
-    return;
-  }
-
-  char *final_include_file_name = NULL;
-
-  /* Loop over all include paths and look for file*/
-  size_t i = 0;
-  while (i < *num_include_paths) {
-    char *full_include_file_name =
-        path_join((*include_paths)[i], *current_multi_line_string);
-
-    if (path_is_file(full_include_file_name)) {
-      final_include_file_name = full_include_file_name;
-      break;
-    }
-
-    free(full_include_file_name);
-
-    i++;
-  }
-
-  if (final_include_file_name) {
-    char *include_error, *include_warning;
-    /* Call the function recursively*/
-    key_file_parse_with_callback(final_include_file_name, callback,
-                                 parse_config, &include_error, &include_warning,
-                                 user_data, include_paths, num_include_paths,
-                                 root_folder);
-    free(final_include_file_name);
-
-    /* Add the error to the error stack if an error occurred in the
-     * recursive call*/
-    if (include_error != NULL) {
-      const size_t error_msg_len = strlen(include_error);
-      *error_stack_size += error_msg_len + 1;
-      *error_stack = realloc(*error_stack, *error_stack_size);
-      memcpy(&(*error_stack)[*error_ptr], include_error, error_msg_len);
-      *error_ptr += error_msg_len;
-      (*error_stack)[*error_ptr] = '\n';
-      (*error_ptr)++;
-      free(include_error);
-    }
-    /* Add the warning to the warning stack if a warning occurred in the
-     * recursive call*/
-    if (include_warning != NULL) {
-      const size_t warning_msg_len = strlen(include_warning);
-      *warning_stack_size += warning_msg_len + 1;
-      *warning_stack = realloc(*warning_stack, *warning_stack_size);
-      memcpy(&(*warning_stack)[*warning_ptr], include_warning, warning_msg_len);
-      *warning_ptr += warning_msg_len;
-      (*warning_stack)[*warning_ptr] = '\n';
-      (*warning_ptr)++;
-      free(include_warning);
-    }
-  } else if (!parse_config->ignore_not_found_includes) {
-    const int error_buffer_size =
-        snprintf(((void *)0), 0, "%s:%zu: \"%s\" could not be found", file_name,
-                 line_count, *current_multi_line_string);
-    *error_stack_size += error_buffer_size + 1;
-    *error_stack = realloc(*error_stack, *error_stack_size);
-    sprintf(&(*error_stack)[*error_ptr], "%s:%zu: \"%s\" could not be found",
-            file_name, line_count, *current_multi_line_string);
-    *error_ptr += error_buffer_size;
-    (*error_stack)[*error_ptr] = '\n';
-    (*error_ptr)++;
-  } else {
-    /* Output a warning*/
-    const int warning_buffer_size =
-        snprintf(((void *)0), 0, "%s:%zu: \"%s\" could not be found", file_name,
-                 line_count, *current_multi_line_string);
-    *warning_stack_size += warning_buffer_size + 1;
-    *warning_stack = realloc(*warning_stack, *warning_stack_size);
-    sprintf(&(*warning_stack)[*warning_ptr],
-            "%s:%zu: \"%s\" could not be found", file_name, line_count,
-            *current_multi_line_string);
-    *warning_ptr += warning_buffer_size;
-    (*warning_stack)[*warning_ptr] = '\n';
-    (*warning_ptr)++;
-  }
-
-  free(*current_multi_line_string);
-  *current_multi_line_string = NULL;
-  *current_multi_line_index = 0;
-
-  /* continue without calling the callback for the card*/
-  if (card->string != line->buffer) {
-    free(card->string);
-  }
-
-  (*card_index)++;
 }

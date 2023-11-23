@@ -28,13 +28,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/* TODO: Make sure to use the correct PATH_SEP on windows when working with the
- * real file system*/
 #define PATH_SEP '/'
 #ifdef _WIN32
-#define REAL_PATH_SEP '\\'
+#define LEGACY_PATH_SEP '\\'
+#define NEW_PATH_SEP '/'
+#define REAL_PATH_SEP LEGACY_PATH_SEP
+#define CHAR_IS_REAL_PATH_SEP(c) (c == LEGACY_PATH_SEP || c == NEW_PATH_SEP)
 #else
 #define REAL_PATH_SEP '/'
+#define CHAR_IS_REAL_PATH_SEP(c) (c == REAL_PATH_SEP)
 #endif
 
 #define PATH_IS_ABS(str) (str[0] == PATH_SEP)
@@ -43,16 +45,22 @@
 extern "C" {
 #endif
 
-#define path_move_up(path) _path_move_up(path, PATH_SEP)
-#define path_move_up_real(path) _path_move_up(path, REAL_PATH_SEP)
-
-/* Returns the index at which the new path string would end (index of PATH_SEP)
+/* Returns the index at which the new path string would end (index of /)
  * when moving up one folder. If no parent folder exists, then ~0 is returned.*/
-size_t _path_move_up(const char *path, char path_sep);
+size_t path_move_up(const char *path);
+
+/* Returns the index at which the new path string would end (index of
+ * REAL_PATH_SEP (on windows this supports both \ and /)) when moving up one
+ * folder. If no parent folder exists, then ~0 is returned.*/
+size_t path_move_up_real(const char *path);
 
 /* Join two paths together by inserting a PATH_SEP. Needs to be deallocated by
  * free*/
 char *path_join(const char *lhs, const char *rhs);
+
+/* Join two paths together by inserting a real PATH_SEP of the native
+ * filesystem. Needs to be deallocated by free*/
+char *path_join_real(const char *lhs, const char *rhs);
 
 /* Returns wether the given path exists and is a file*/
 int path_is_file(const char *path_name);
