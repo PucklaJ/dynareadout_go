@@ -44,6 +44,7 @@ type KeyFileParseCallback func(KeyParseInfo, string, *Card, int)
 type KeyFileParseConfig struct {
 	ParseIncludes          bool
 	IgnoreNotFoundIncludes bool
+	ExtraIncludePaths      []string
 }
 
 type KeyFileWarning struct {
@@ -70,23 +71,20 @@ func KeyFileParse(fileName string, parseConfig KeyFileParseConfig) (Keywords, *K
 	var warning *KeyFileWarning
 	var errorString *C.char
 	var warningString *C.char
-	var cParseConfig C.key_parse_config_t
 
-	if parseConfig.ParseIncludes {
-		cParseConfig.parse_includes = 1
-	} else {
-		cParseConfig.parse_includes = 0
-	}
-	if parseConfig.IgnoreNotFoundIncludes {
-		cParseConfig.ignore_not_found_includes = 1
-	} else {
-		cParseConfig.ignore_not_found_includes = 0
-	}
-
+	cParseConfig := parseConfig.toC()
 	fileNameC := C.CString(fileName)
 
 	keywords.handle = C.key_file_parse(fileNameC, &keywords.numKeywords, &cParseConfig, &errorString, &warningString)
 	C.free(unsafe.Pointer(fileNameC))
+
+	if cParseConfig.extra_include_paths != nil {
+		for i := C.size_t(0); i < cParseConfig.num_extra_include_paths; i++ {
+			ptr := (**C.char)(unsafe.Add(unsafe.Pointer(cParseConfig.extra_include_paths), uintptr(i)*unsafe.Sizeof(*cParseConfig.extra_include_paths)))
+			C.free(unsafe.Pointer(*ptr))
+		}
+		C.free(unsafe.Pointer(cParseConfig.extra_include_paths))
+	}
 
 	if warningString != nil {
 		warning = new(KeyFileWarning)
@@ -337,26 +335,36 @@ func (i KeyParseInfo) RootFolder() string {
 	return C.GoString(i.handle.root_folder)
 }
 
+func (c KeyFileParseConfig) toC() (cfg C.key_parse_config_t) {
+	if c.ParseIncludes {
+		cfg.parse_includes = 1
+	}
+	if c.IgnoreNotFoundIncludes {
+		cfg.ignore_not_found_includes = 1
+	}
+	if len(c.ExtraIncludePaths) != 0 {
+		cfg.extra_include_paths = (**C.char)(C.malloc(C.size_t(uintptr(len(c.ExtraIncludePaths)) * unsafe.Sizeof(*cfg.extra_include_paths))))
+		if cfg.extra_include_paths != nil {
+			cfg.num_extra_include_paths = C.size_t(len(c.ExtraIncludePaths))
+			for i, v := range c.ExtraIncludePaths {
+				ptr := (**C.char)(unsafe.Add(unsafe.Pointer(cfg.extra_include_paths), uintptr(i)*unsafe.Sizeof(*cfg.extra_include_paths)))
+				*ptr = C.CString(v)
+			}
+		}
+	}
+	return
+}
+
 var keyFileCallbacks map[uintptr]KeyFileParseCallback
 var keyFileCallbacksMtx sync.Mutex
 
 func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, parseConfig KeyFileParseConfig) (*KeyFileWarning, error) {
 	fileNameC := C.CString(fileName)
-	var cParseConfig C.key_parse_config_t
 	var errorString *C.char
 	var warningString *C.char
 	var warning *KeyFileWarning
 
-	if parseConfig.ParseIncludes {
-		cParseConfig.parse_includes = 1
-	} else {
-		cParseConfig.parse_includes = 0
-	}
-	if parseConfig.IgnoreNotFoundIncludes {
-		cParseConfig.ignore_not_found_includes = 1
-	} else {
-		cParseConfig.ignore_not_found_includes = 0
-	}
+	cParseConfig := parseConfig.toC()
 
 	keyFileCallbacksMtx.Lock()
 	if keyFileCallbacks == nil {
@@ -385,6 +393,14 @@ func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, pa
 		nil,
 	)
 	C.free(unsafe.Pointer(fileNameC))
+
+	if cParseConfig.extra_include_paths != nil {
+		for i := C.size_t(0); i < cParseConfig.num_extra_include_paths; i++ {
+			ptr := (**C.char)(unsafe.Add(unsafe.Pointer(cParseConfig.extra_include_paths), uintptr(i)*unsafe.Sizeof(*cParseConfig.extra_include_paths)))
+			C.free(unsafe.Pointer(*ptr))
+		}
+		C.free(unsafe.Pointer(cParseConfig.extra_include_paths))
+	}
 
 	if warningString != nil {
 		warning = new(KeyFileWarning)

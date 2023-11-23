@@ -296,3 +296,26 @@ func TestKeyFileParseWithCallback(t *testing.T) {
 		return
 	}
 }
+
+func TestExtraIncludes(t *testing.T) {
+	_, warn, err := KeyFileParse("test_data/extra_include_paths.k", KeyFileParseConfig{
+		ParseIncludes:          true,
+		IgnoreNotFoundIncludes: false,
+		ExtraIncludePaths: []string{
+			"test_data/extra_folder",
+		},
+	})
+
+	assert.Nil(t, warn)
+	assert.Nil(t, err)
+	warn, err = KeyFileParseWithCallback("test_data/extra_include_paths.k", func(_ KeyParseInfo, _ string, _ *Card, _ int) {}, KeyFileParseConfig{
+		ParseIncludes:          true,
+		IgnoreNotFoundIncludes: false,
+		ExtraIncludePaths: []string{
+			"test_data/extra_folder",
+		},
+	})
+
+	assert.Nil(t, warn)
+	assert.Nil(t, err)
+}
