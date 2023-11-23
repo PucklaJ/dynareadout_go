@@ -1,7 +1,7 @@
 package dynareadout
 
 /*
-#cgo CFLAGS: -DTHREAD_SAFE
+#cgo CFLAGS: -ansi
 #cgo LDFLAGS: -lm
 #include "dynareadout/src/binary_search.c"
 #include "dynareadout/src/binout_directory.c"
@@ -19,6 +19,7 @@ package dynareadout
 #include "dynareadout/src/multi_file.c"
 #include "dynareadout/src/path_view.c"
 #include "dynareadout/src/path.c"
+#include "dynareadout/src/string_builder.c"
 #include "dynareadout/src/sync.c"
 #include "header.h"
 

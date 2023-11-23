@@ -1,7 +1,7 @@
 package dynareadout
 
 /*
-#cgo CFLAGS: -DTHREAD_SAFE
+#cgo CFLAGS: -ansi
 #include <errno.h>
 #include <stdlib.h>
 #include "dynareadout/src/key.h"
@@ -335,8 +335,6 @@ func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, pa
 		&errorString,
 		&warningString,
 		unsafe.Pointer(&callback),
-		nil,
-		nil,
 		nil,
 	)
 	C.free(unsafe.Pointer(fileNameC))

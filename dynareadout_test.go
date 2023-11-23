@@ -111,7 +111,7 @@ func TestBinout(t *testing.T) {
 }
 
 func TestD3plot(t *testing.T) {
-	plotFile, err := D3plotOpen("test_data/d3plot")
+	plotFile, err := D3plotOpen("test_data/d3plot_files/d3plot")
 	if !assert.Nil(t, err) {
 		return
 	}
