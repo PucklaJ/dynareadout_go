@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"unsafe"
 )
 
@@ -38,7 +39,7 @@ type Card struct {
 	handle *C.card_t
 }
 
-type KeyFileParseCallback func(string, int, string, *Card, int)
+type KeyFileParseCallback func(KeyParseInfo, string, *Card, int)
 
 type KeyFileParseConfig struct {
 	ParseIncludes          bool
@@ -47,6 +48,10 @@ type KeyFileParseConfig struct {
 
 type KeyFileWarning struct {
 	warningString string
+}
+
+type KeyParseInfo struct {
+	handle C.key_parse_info_t
 }
 
 func (w *KeyFileWarning) Error() string {
@@ -311,6 +316,30 @@ func (c Card) ParseGetTypeWidth(valueWidth int) int {
 	return int(C.card_parse_get_type_width(c.handle, C.uint8_t(valueWidth)))
 }
 
+func (i KeyParseInfo) FileName() string {
+	return C.GoString(i.handle.file_name)
+}
+
+func (i KeyParseInfo) LineNumber() int {
+	return int(i.handle.line_number)
+}
+
+func (i KeyParseInfo) IncludePaths() []string {
+	rv := make([]string, i.handle.num_include_paths)
+	for j := C.size_t(0); j < i.handle.num_include_paths; j++ {
+		pathC := (*C.char)(unsafe.Add(unsafe.Pointer(i.handle.include_paths), uintptr(j)*unsafe.Sizeof(*i.handle.include_paths)))
+		rv = append(rv, C.GoString(pathC))
+	}
+	return rv
+}
+
+func (i KeyParseInfo) RootFolder() string {
+	return C.GoString(i.handle.root_folder)
+}
+
+var keyFileCallbacks map[uintptr]KeyFileParseCallback
+var keyFileCallbacksMtx sync.Mutex
+
 func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, parseConfig KeyFileParseConfig) (*KeyFileWarning, error) {
 	fileNameC := C.CString(fileName)
 	var cParseConfig C.key_parse_config_t
@@ -329,12 +358,30 @@ func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, pa
 		cParseConfig.ignore_not_found_includes = 0
 	}
 
+	keyFileCallbacksMtx.Lock()
+	if keyFileCallbacks == nil {
+		keyFileCallbacks = make(map[uintptr]KeyFileParseCallback)
+	}
+	var callbackIndex uintptr
+	for callbackIndex = 0; ; callbackIndex++ {
+		if _, ok := keyFileCallbacks[callbackIndex]; !ok {
+			break
+		}
+	}
+	keyFileCallbacks[callbackIndex] = callback
+	keyFileCallbacksMtx.Unlock()
+	defer func() {
+		keyFileCallbacksMtx.Lock()
+		defer keyFileCallbacksMtx.Unlock()
+		delete(keyFileCallbacks, callbackIndex)
+	}()
+
 	C.key_file_parse_with_callback(fileNameC,
 		C.key_file_callback(C.keyFileParseGoCallback),
 		&cParseConfig,
 		&errorString,
 		&warningString,
-		unsafe.Pointer(&callback),
+		unsafe.Pointer(callbackIndex),
 		nil,
 	)
 	C.free(unsafe.Pointer(fileNameC))
@@ -355,11 +402,13 @@ func KeyFileParseWithCallback(fileName string, callback KeyFileParseCallback, pa
 }
 
 //export keyFileParseGoCallback
-func keyFileParseGoCallback(fileNameC *C.char, lineNumberC C.size_t, keywordNameC *C.char, cardC *C.card_t, cardIndexC C.size_t, userData unsafe.Pointer) {
-	callback := *(*KeyFileParseCallback)(userData)
+func keyFileParseGoCallback(infoC C.key_parse_info_t, keywordNameC *C.char, cardC *C.card_t, cardIndexC C.size_t, userData unsafe.Pointer) {
+	callbackIndex := uintptr(userData)
+	keyFileCallbacksMtx.Lock()
+	defer keyFileCallbacksMtx.Unlock()
+	callback := keyFileCallbacks[callbackIndex]
 
-	fileName := C.GoString(fileNameC)
-	lineNumber := int(lineNumberC)
+	info := KeyParseInfo{infoC}
 	keywordName := C.GoString(keywordNameC)
 	var card *Card
 	if cardC != nil {
@@ -373,5 +422,5 @@ func keyFileParseGoCallback(fileNameC *C.char, lineNumberC C.size_t, keywordName
 		cardIndex = int(cardIndexC)
 	}
 
-	callback(fileName, lineNumber, keywordName, card, cardIndex)
+	callback(info, keywordName, card, cardIndex)
 }

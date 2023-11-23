@@ -282,13 +282,14 @@ func TestKeyFile(t *testing.T) {
 
 func TestKeyFileParseWithCallback(t *testing.T) {
 	warn, err := KeyFileParseWithCallback("test_data/key_file.k",
-		func(fileName string, lineNumber int, keywordName string, card *Card, cardIndex int) {
+		func(info KeyParseInfo, keywordName string, card *Card, cardIndex int) {
 			var cardString string
 			if card != nil {
 				cardString = fmt.Sprint("Card: ", card.ParseWholeNoTrim(), " CardIndex: ", cardIndex)
 			}
 
-			fmt.Println("Filename:", fileName, "Line:", lineNumber, "Keyword:", keywordName, cardString)
+			fmt.Println("Filename:", info.FileName(), "Line:", info.LineNumber(), "Keyword:", keywordName, cardString)
+
 		}, DefaultKeyFileParseConfig())
 	assert.Nil(t, warn)
 	if !assert.Nil(t, err) {
