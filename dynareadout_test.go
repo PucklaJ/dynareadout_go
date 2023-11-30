@@ -319,3 +319,38 @@ func TestExtraIncludes(t *testing.T) {
 	assert.Nil(t, warn)
 	assert.Nil(t, err)
 }
+
+func TestIncludeTransform(t *testing.T) {
+	kw, warn, err := KeyFileParse("test_data/include_transform.k", DefaultKeyFileParseConfig())
+	assert.Nil(t, warn)
+	if !assert.Nil(t, err) {
+		return
+	}
+	defer kw.Free()
+
+	itKw, err := kw.Get("INCLUDE_TRANSFORM", 0)
+	if !assert.Nil(t, err) {
+		return
+	}
+	dtKw, err := kw.Get("DEFINE_TRANSFORMATION", 0)
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	it := KeyParseIncludeTransform(itKw)
+	defer it.Free()
+
+	assert.Equal(t, "asidjasidjasidjasnlkdfmg9lmdf9lgmd9flgmd9flg dgd dfgdofjgdfigjdoifjgmdfogmidkoasidjasidjasi6jasnlkdfmg9lmdf9lgmd9flgmd9flg dgd dfgdofjgdfigjdoifjgmdfogmidkoasidjasidjasi6jasnlkdfmg9lmdf9lgmd9flgmd9flg dgd dfgdofjgdfigjdoifjgmdfogmidko.k", it.FileName())
+	assert.Equal(t, 120, it.Tranid())
+
+	dt := KeyParseDefineTransformation(dtKw, false)
+	defer dt.Free()
+
+	assert.Equal(t, 120, dt.Tranid())
+
+	opts := dt.Options()
+	if assert.Len(t, opts, 10) {
+		assert.Equal(t, "MIRROR", opts[0].Name)
+		assert.Equal(t, 1.0, opts[0].Parameters[3])
+	}
+}
