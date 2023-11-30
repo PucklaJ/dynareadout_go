@@ -5,6 +5,7 @@ package dynareadout
 #include <errno.h>
 #include <stdlib.h>
 #include "dynareadout/src/key.h"
+#include "dynareadout/src/include_transform.h"
 #include "header.h"
 */
 import "C"
@@ -53,6 +54,19 @@ type KeyFileWarning struct {
 
 type KeyParseInfo struct {
 	handle C.key_parse_info_t
+}
+
+type IncludeTransform struct {
+	handle C.include_transform_t
+}
+
+type DefineTransformation struct {
+	handle C.define_transformation_t
+}
+
+type TransformOption struct {
+	Name       string
+	Parameters [7]float64
 }
 
 func (w *KeyFileWarning) Error() string {
@@ -314,6 +328,18 @@ func (c Card) ParseGetTypeWidth(valueWidth int) int {
 	return int(C.card_parse_get_type_width(c.handle, C.uint8_t(valueWidth)))
 }
 
+func (c Card) TryParseInt(value *int) {
+	valueC := C.int64_t(*value)
+	C._card_try_parse_int(c.handle, &valueC)
+	*value = int(valueC)
+}
+
+func (c Card) TryParseFloat64(value *float64) {
+	valueC := C.double(*value)
+	C._card_try_parse_float64(c.handle, &valueC)
+	*value = float64(valueC)
+}
+
 func (i KeyParseInfo) FileName() string {
 	return C.GoString(i.handle.file_name)
 }
@@ -439,4 +465,127 @@ func keyFileParseGoCallback(infoC C.key_parse_info_t, keywordNameC *C.char, card
 	}
 
 	callback(info, keywordName, card, cardIndex)
+}
+
+func KeyParseIncludeTransform(kw Keyword) IncludeTransform {
+	handle := C.key_parse_include_transform(kw.handle)
+	return IncludeTransform{handle}
+}
+
+func (it *IncludeTransform) Free() {
+	C.key_free_include_transform(&it.handle)
+}
+
+func (it *IncludeTransform) ParseCard(card Card, cardIndex int) {
+	C.key_parse_include_transform_card(&it.handle, card.handle, C.size_t(cardIndex))
+}
+
+func (it IncludeTransform) FileName() string {
+	return C.GoString(it.handle.file_name)
+}
+
+func (it IncludeTransform) Idnoff() int {
+	return int(it.handle.idnoff)
+}
+
+func (it IncludeTransform) Ideoff() int {
+	return int(it.handle.ideoff)
+}
+
+func (it IncludeTransform) Idpoff() int {
+	return int(it.handle.idpoff)
+}
+
+func (it IncludeTransform) Idmoff() int {
+	return int(it.handle.idmoff)
+}
+
+func (it IncludeTransform) Idsoff() int {
+	return int(it.handle.idsoff)
+}
+
+func (it IncludeTransform) Idfoff() int {
+	return int(it.handle.iddoff)
+}
+
+func (it IncludeTransform) idroff() int {
+	return int(it.handle.idroff)
+}
+
+func (it IncludeTransform) Prefix() string {
+	return C.GoString(it.handle.prefix)
+}
+
+func (it IncludeTransform) Suffix() string {
+	return C.GoString(it.handle.suffix)
+}
+
+func (it IncludeTransform) Fctmas() float64 {
+	return float64(it.handle.fctmas)
+}
+
+func (it IncludeTransform) Fcttim() float64 {
+	return float64(it.handle.fcttim)
+}
+
+func (it IncludeTransform) Fctlen() float64 {
+	return float64(it.handle.fctlen)
+}
+
+func (it IncludeTransform) Fcttem() string {
+	return C.GoString(it.handle.fcttem)
+}
+
+func (it IncludeTransform) Incout1() int {
+	return int(it.handle.incout1)
+}
+
+func (it IncludeTransform) Tranid() int {
+	return int(it.handle.tranid)
+}
+
+func KeyParseDefineTransformation(kw Keyword, isTitle bool) DefineTransformation {
+	var isTitleC C.int
+	if isTitle {
+		isTitleC = 1
+	}
+
+	handle := C.key_parse_define_transformation(kw.handle, isTitleC)
+	return DefineTransformation{handle}
+}
+
+func (dt *DefineTransformation) Free() {
+	C.key_free_define_transformation(&dt.handle)
+}
+
+func (dt *DefineTransformation) ParseCard(card Card, cardIndex int, isTitle bool) {
+	var isTitleC C.int
+	if isTitle {
+		isTitleC = 1
+	}
+	C.key_parse_define_transformation_card(&dt.handle, card.handle, C.size_t(cardIndex), isTitleC)
+}
+
+func (dt DefineTransformation) Tranid() int {
+	return int(dt.handle.tranid)
+}
+
+func (dt DefineTransformation) Title() string {
+	if dt.handle.title == nil {
+		return ""
+	}
+	return C.GoString(dt.handle.title)
+}
+
+func (dt DefineTransformation) Options() []TransformOption {
+	rv := make([]TransformOption, dt.handle.num_options)
+	for i := 0; i < len(rv); i++ {
+		optC := *(*C.transformation_option_t)(unsafe.Add(unsafe.Pointer(dt.handle.options), unsafe.Sizeof(*dt.handle.options)*uintptr(i)))
+
+		rv[i].Name = C.GoString(optC.name)
+		for j := 0; j < 7; j++ {
+			rv[i].Parameters[j] = float64(optC.parameters[j])
+		}
+	}
+	return rv
 }

@@ -14,6 +14,7 @@ package dynareadout
 #include "dynareadout/src/d3plot_state.c"
 #include "dynareadout/src/d3plot.c"
 #include "dynareadout/src/extra_string.c"
+#include "dynareadout/src/include_transform.c"
 #include "dynareadout/src/key.c"
 #include "dynareadout/src/line.c"
 #include "dynareadout/src/multi_file.c"
